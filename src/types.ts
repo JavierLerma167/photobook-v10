@@ -22,7 +22,7 @@ export interface Photo {
   createdAt: number;
 }
 
-export type SlotFit = 'cover' | 'contain';
+export type SlotFit = 'cover' | 'contain' | 'fill';
 
 export interface Slot {
   id: string;
