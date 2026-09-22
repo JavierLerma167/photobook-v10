@@ -1,447 +1,121 @@
-'use client';
+export type AlbumSizeId = '8x8' | '10x10' | '12x12' | '11x14';
 
-import React from 'react';
-import { useStore } from '@/src/store/projectStore';
-import { AlbumSize, Page } from '@/src/types';
-import { SlotView } from './PhotoSlot';
-import { TextElementView } from './TextElementView';
+export interface AlbumSize {
+  id: AlbumSizeId;
+  label: string;
+  widthIn: number;
+  heightIn: number;
+  bleedIn: number;
+  safeIn: number;
+  gutterIn: number;
+}
 
-interface Props {
-  size: AlbumSize;
+export interface Photo {
+  id: string;
+  name: string;
+  url: string;
+  proxyUrl: string;
+  width: number;
+  height: number;
+  sizeBytes: number;
+  favorite: boolean;
+  createdAt: number;
+}
+
+export type SlotFit = 'cover' | 'contain';
+
+export interface Slot {
+  id: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  photoId: string | null;
+  fit: SlotFit;
+  offsetX: number;
+  offsetY: number;
   zoom: number;
+  rotation: number;
+  locked: boolean;
+  z: number;
 }
 
-const PX_PER_IN = 96;
-
-export function Spread({ size, zoom }: Props) {
-  const project = useStore(s => s.history.present);
-  const currentIndex = project.currentPageIndex;
-  const showGuides = useStore(s => s.ui.showGuides);
-  const showGrid = useStore(s => s.ui.showGrid);
-  const selectedSlotId = useStore(s => s.ui.selectedSlotId);
-  const selectedTextId = useStore(s => s.ui.selectedTextId);
-
-  const leftPage = project.pages[currentIndex];
-  const rightPage = project.pages[currentIndex + 1];
-  const prevPage = currentIndex > 0 ? project.pages[currentIndex - 1] : undefined;
-
-  // Caso 1: página "consumida" por la anterior (spanNext del anterior)
-  // En este caso mostramos la página anterior como página extendida
-  if (prevPage?.spanNext && leftPage) {
-    return (
-      <SpannedPage
-        page={prevPage}
-        size={size}
-        showGuides={showGuides}
-        showGrid={showGrid}
-        selectedSlotId={selectedSlotId}
-        selectedTextId={selectedTextId}
-      />
-    );
-  }
-
-  // Caso 2: portada → página sola
-  if (leftPage?.kind === 'cover') {
-    return (
-      <SinglePage
-        page={leftPage}
-        size={size}
-        showGuides={showGuides}
-        showGrid={showGrid}
-        selectedSlotId={selectedSlotId}
-        selectedTextId={selectedTextId}
-      />
-    );
-  }
-
-  // Caso 3: página izquierda extendida → página de doble ancho
-  if (leftPage?.spanNext) {
-    return (
-      <SpannedPage
-        page={leftPage}
-        size={size}
-        showGuides={showGuides}
-        showGrid={showGrid}
-        selectedSlotId={selectedSlotId}
-        selectedTextId={selectedTextId}
-      />
-    );
-  }
-
-  // Caso 4: no hay página derecha → izquierda sola
-  if (!rightPage) {
-    return (
-      <SinglePage
-        page={leftPage}
-        size={size}
-        showGuides={showGuides}
-        showGrid={showGrid}
-        selectedSlotId={selectedSlotId}
-        selectedTextId={selectedTextId}
-      />
-    );
-  }
-
-  // Caso 5: spread normal
-  return (
-    <SpreadDouble
-      leftPage={leftPage}
-      rightPage={rightPage}
-      size={size}
-      showGuides={showGuides}
-      showGrid={showGrid}
-      selectedSlotId={selectedSlotId}
-      selectedTextId={selectedTextId}
-    />
-  );
+export interface TextElement {
+  id: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  text: string;
+  fontFamily: string;
+  fontSize: number;
+  fontWeight: number;
+  color: string;
+  align: 'left' | 'center' | 'right';
+  tracking: number;
+  lineHeight: number;
+  rotation: number;
+  locked: boolean;
+  z: number;
 }
 
-/* ============================================================
- * Página individual (portada o última página impar)
- * ============================================================ */
-function SinglePage({
-  page, size, showGuides, showGrid, selectedSlotId, selectedTextId
-}: {
-  page: Page;
-  size: AlbumSize;
-  showGuides: boolean;
-  showGrid: boolean;
-  selectedSlotId: string | null;
-  selectedTextId: string | null;
-}) {
-  const pageW = size.widthIn * PX_PER_IN;
-  const pageH = size.heightIn * PX_PER_IN;
-  const bleed = size.bleedIn * PX_PER_IN;
-  const safe = size.safeIn * PX_PER_IN;
+export type PageKind = 'cover' | 'spread';
 
-  const totalW = pageW + bleed * 2;
-  const totalH = pageH + bleed * 2;
-
-  return (
-    <div
-      className="relative bg-white shadow-2xl"
-      style={{ width: totalW, height: totalH, borderRadius: 2 }}
-    >
-      <div className="absolute inset-0" style={{ background: page.background || '#ffffff' }} />
-
-      <div
-        className="absolute"
-        style={{
-          left: bleed,
-          top: bleed,
-          width: pageW,
-          height: pageH,
-          overflow: 'hidden'
-        }}
-      >
-        <PageInner
-          page={page}
-          pageWidth={pageW}
-          pageHeight={pageH}
-          safe={safe}
-          showGuides={showGuides}
-          showGrid={showGrid}
-          selectedSlotId={selectedSlotId}
-          selectedTextId={selectedTextId}
-        />
-      </div>
-
-      {showGuides && (
-        <div
-          className="absolute pointer-events-none border border-red-500/60"
-          style={{ left: bleed, top: bleed, width: pageW, height: pageH }}
-        />
-      )}
-    </div>
-  );
+export interface Page {
+  id: string;
+  kind: PageKind;
+  templateId: string | null;
+  slots: Slot[];
+  texts: TextElement[];
+  background: string;
+  label?: string;
+  spanNext?: boolean;
 }
 
-/* ============================================================
- * Doble página real (dos páginas consecutivas)
- * ============================================================ */
-function SpreadDouble({
-  leftPage, rightPage, size, showGuides, showGrid, selectedSlotId, selectedTextId
-}: {
-  leftPage: Page;
-  rightPage: Page;
-  size: AlbumSize;
-  showGuides: boolean;
-  showGrid: boolean;
-  selectedSlotId: string | null;
-  selectedTextId: string | null;
-}) {
-  const pageW = size.widthIn * PX_PER_IN;
-  const pageH = size.heightIn * PX_PER_IN;
-  const bleed = size.bleedIn * PX_PER_IN;
-  const safe = size.safeIn * PX_PER_IN;
-  const gutter = size.gutterIn * PX_PER_IN;
-
-  const totalW = pageW * 2 + bleed * 2;
-  const totalH = pageH + bleed * 2;
-
-  return (
-    <div
-      className="relative bg-white shadow-2xl"
-      style={{ width: totalW, height: totalH, borderRadius: 2 }}
-    >
-      {/* Mitad IZQUIERDA → leftPage */}
-      <div
-        className="absolute"
-        style={{
-          left: bleed,
-          top: bleed,
-          width: pageW,
-          height: pageH,
-          overflow: 'hidden',
-          background: leftPage.background || '#ffffff'
-        }}
-      >
-        <PageInner
-          page={leftPage}
-          pageWidth={pageW}
-          pageHeight={pageH}
-          safe={safe}
-          showGuides={showGuides}
-          showGrid={showGrid}
-          selectedSlotId={selectedSlotId}
-          selectedTextId={selectedTextId}
-        />
-      </div>
-
-      {/* Mitad DERECHA → rightPage */}
-      <div
-        className="absolute"
-        style={{
-          left: bleed + pageW,
-          top: bleed,
-          width: pageW,
-          height: pageH,
-          overflow: 'hidden',
-          background: rightPage.background || '#ffffff'
-        }}
-      >
-        <PageInner
-          page={rightPage}
-          pageWidth={pageW}
-          pageHeight={pageH}
-          safe={safe}
-          showGuides={showGuides}
-          showGrid={showGrid}
-          selectedSlotId={selectedSlotId}
-          selectedTextId={selectedTextId}
-        />
-      </div>
-
-      {/* Gutter (línea central de encuadernación) */}
-      <div
-        className="absolute pointer-events-none"
-        style={{
-          left: bleed + pageW - gutter / 2,
-          top: bleed,
-          width: gutter,
-          height: pageH,
-          background: 'rgba(232,176,75,0.08)',
-          borderLeft: '1px dashed rgba(232,176,75,0.5)',
-          borderRight: '1px dashed rgba(232,176,75,0.5)'
-        }}
-      />
-
-      {/* Línea de trim total */}
-      {showGuides && (
-        <div
-          className="absolute pointer-events-none border border-red-500/60"
-          style={{ left: bleed, top: bleed, width: totalW - bleed * 2, height: totalH - bleed * 2 }}
-        />
-      )}
-    </div>
-  );
+export interface Template {
+  id: string;
+  name: string;
+  category: string;
+  style: string;
+  photoCount: number;
+  builtin: boolean;
+  slots: Array<Pick<Slot, 'x' | 'y' | 'w' | 'h'>>;
 }
 
-/* ============================================================
- * Página EXTENDIDA (spanNext)
- * - Un solo lienzo de doble ancho
- * - Coordenadas de slots en el rango 0-200 (para cruzar el gutter)
- * - Renderiza el gutter como referencia visual en el centro
- * ============================================================ */
-function SpannedPage({
-  page, size, showGuides, showGrid, selectedSlotId, selectedTextId
-}: {
-  page: Page;
-  size: AlbumSize;
-  showGuides: boolean;
-  showGrid: boolean;
-  selectedSlotId: string | null;
-  selectedTextId: string | null;
-}) {
-  const pageW = size.widthIn * PX_PER_IN;
-  const pageH = size.heightIn * PX_PER_IN;
-  const bleed = size.bleedIn * PX_PER_IN;
-  const safe = size.safeIn * PX_PER_IN;
-  const gutter = size.gutterIn * PX_PER_IN;
-
-  // El "canvas" del spread tiene el doble de ancho
-  const totalW = pageW * 2 + bleed * 2;
-  const totalH = pageH + bleed * 2;
-
-  return (
-    <div
-      className="relative bg-white shadow-2xl"
-      style={{ width: totalW, height: totalH, borderRadius: 2 }}
-    >
-      {/* Fondo (se aplica a las dos mitades) */}
-      <div className="absolute inset-0" style={{ background: page.background || '#ffffff' }} />
-
-      {/* Área de la página extendida */}
-      <div
-        className="absolute"
-        style={{
-          left: bleed,
-          top: bleed,
-          width: pageW * 2,
-          height: pageH,
-          overflow: 'hidden'
-        }}
-      >
-        {/* Grid */}
-        {showGrid && (
-          <div
-            className="absolute inset-0 pointer-events-none opacity-20"
-            style={{
-              backgroundImage:
-                'linear-gradient(to right, #888 1px, transparent 1px), linear-gradient(to bottom, #888 1px, transparent 1px)',
-              backgroundSize: '40px 40px'
-            }}
-          />
-        )}
-
-        {/* Safe zone (abarca las dos mitades) */}
-        {showGuides && (
-          <div
-            className="absolute pointer-events-none border border-sky-500/40"
-            style={{
-              left: safe,
-              top: safe,
-              width: pageW * 2 - safe * 2,
-              height: pageH - safe * 2
-            }}
-          />
-        )}
-
-        {/* Slots: coordenadas 0-200% del ancho de UNA página */}
-        {page.slots.map(slot => (
-          <SlotView
-            key={slot.id}
-            slot={slot}
-            page={page}
-            pageWidth={pageW * 2}
-            pageHeight={pageH}
-            offsetX={0}
-            viewWidth={pageW * 2}
-            selected={selectedSlotId === slot.id}
-          />
-        ))}
-
-        {/* Textos: coordenadas 0-200% del ancho de UNA página */}
-        {page.texts.map(t => (
-          <TextElementView
-            key={t.id}
-            text={t}
-            pageWidth={pageW * 2}
-            pageHeight={pageH}
-            offsetX={0}
-            selected={selectedTextId === t.id}
-          />
-        ))}
-      </div>
-
-      {/* Gutter de referencia (línea central dorada) */}
-      <div
-        className="absolute pointer-events-none"
-        style={{
-          left: bleed + pageW - gutter / 2,
-          top: bleed,
-          width: gutter,
-          height: pageH,
-          background: 'rgba(232,176,75,0.08)',
-          borderLeft: '1px dashed rgba(232,176,75,0.5)',
-          borderRight: '1px dashed rgba(232,176,75,0.5)'
-        }}
-      />
-
-      {/* Línea de trim total */}
-      {showGuides && (
-        <div
-          className="absolute pointer-events-none border border-red-500/60"
-          style={{ left: bleed, top: bleed, width: totalW - bleed * 2, height: totalH - bleed * 2 }}
-        />
-      )}
-    </div>
-  );
+export interface Project {
+  id: string;
+  name: string;
+  sizeId: AlbumSizeId;
+  pages: Page[];
+  photos: Photo[];
+  currentPageIndex: number;
+  version: number;
+  createdAt: number;
+  updatedAt: number;
+  printProfileId: string;
 }
 
-/* ============================================================
- * Contenido interno de una página (usado por SinglePage y SpreadDouble)
- * ============================================================ */
-function PageInner({
-  page, pageWidth, pageHeight, safe, showGuides, showGrid, selectedSlotId, selectedTextId
-}: {
-  page: Page;
-  pageWidth: number;
-  pageHeight: number;
-  safe: number;
-  showGuides: boolean;
-  showGrid: boolean;
-  selectedSlotId: string | null;
-  selectedTextId: string | null;
-}) {
-  return (
-    <>
-      {showGrid && (
-        <div
-          className="absolute inset-0 pointer-events-none opacity-20"
-          style={{
-            backgroundImage:
-              'linear-gradient(to right, #888 1px, transparent 1px), linear-gradient(to bottom, #888 1px, transparent 1px)',
-            backgroundSize: '40px 40px'
-          }}
-        />
-      )}
+export interface PrintProfile {
+  id: string;
+  name: string;
+  sizeId: AlbumSizeId;
+  dpi: number;
+  bleedIn: number;
+  safeIn: number;
+  gutterIn: number;
+  colorSpace: 'sRGB' | 'AdobeRGB' | 'CMYK';
+  format: 'JPEG' | 'PDF';
+  naming: string;
+}
 
-      {showGuides && (
-        <div
-          className="absolute pointer-events-none border border-sky-500/40"
-          style={{
-            left: safe,
-            top: safe,
-            width: pageWidth - safe * 2,
-            height: pageHeight - safe * 2
-          }}
-        />
-      )}
+export type PreflightLevel = 'error' | 'warning' | 'ok';
 
-      {page.slots.map(slot => (
-        <SlotView
-          key={slot.id}
-          slot={slot}
-          page={page}
-          pageWidth={pageWidth}
-          pageHeight={pageHeight}
-          offsetX={0}
-          viewWidth={pageWidth}
-          selected={selectedSlotId === slot.id}
-        />
-      ))}
-
-      {page.texts.map(t => (
-        <TextElementView
-          key={t.id}
-          text={t}
-          pageWidth={pageWidth}
-          pageHeight={pageHeight}
-          offsetX={0}
-          selected={selectedTextId === t.id}
-        />
-      ))}
-    </>
-  );
+export interface PreflightIssue {
+  id: string;
+  level: PreflightLevel;
+  pageId?: string;
+  slotId?: string;
+  textId?: string;
+  message: string;
+  category: string;
 }
