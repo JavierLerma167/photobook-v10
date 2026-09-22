@@ -28,11 +28,12 @@ export function SlotView({ slot, page, pageWidth, pageHeight, offsetX, viewWidth
   const select = useStore(s => s.select);
   const toggleSlotSelection = useStore(s => s.toggleSlotSelection);
   const selectedIds = useStore(s => s.ui.selectedSlotIds);
+  const selectedSlotId = useStore(s => s.ui.selectedSlotId);
   const [dragOver, setDragOver] = useState(false);
   const photo = slot.photoId ? photos.find(p => p.id === slot.photoId) : null;
 
-  const isMultiSelected = selectedIds.includes(slot.id);
-  const isPrimary = selected;
+  const isMultiSelected = selectedIds.length > 1 && selectedIds.includes(slot.id);
+  const isPrimary = selectedSlotId === slot.id;
 
   const left = (slot.x / 100) * pageWidth;
   const top = (slot.y / 100) * pageHeight;
@@ -212,10 +213,8 @@ export function SlotView({ slot, page, pageWidth, pageHeight, offsetX, viewWidth
   const beginResize = (e: React.MouseEvent, handle: HandlePos) => {
     if (slot.locked) return;
 
-    // Parar el evento INMEDIATAMENTE, antes de que burbujee al padre
     e.stopPropagation();
     e.preventDefault();
-    // stopImmediatePropagation corta cualquier otro listener en el mismo elemento
     if (e.nativeEvent && typeof e.nativeEvent.stopImmediatePropagation === 'function') {
       e.nativeEvent.stopImmediatePropagation();
     }
@@ -325,6 +324,8 @@ export function SlotView({ slot, page, pageWidth, pageHeight, offsetX, viewWidth
     ? 'ring-2 ring-evr-accent'
     : '';
 
+  const slotBackground = slot.fit === 'contain' ? '#1a1d23' : '#f5f5f5';
+
   return (
     <div
       className={`absolute ${ringClass}`}
@@ -344,7 +345,10 @@ export function SlotView({ slot, page, pageWidth, pageHeight, offsetX, viewWidth
         if (slot.photoId) clearSlot(slot.id);
       }}
     >
-      <div className="w-full h-full overflow-hidden relative bg-neutral-100">
+      <div
+        className="w-full h-full overflow-hidden relative"
+        style={{ background: slotBackground }}
+      >
         {photo ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -352,11 +356,12 @@ export function SlotView({ slot, page, pageWidth, pageHeight, offsetX, viewWidth
             alt={photo.name}
             draggable={false}
             onMouseDown={onPhotoMouseDown}
-            className="absolute select-none pointer-events-none"
+            className="absolute select-none pointer-events-none inset-0"
             style={{
               width: '100%',
               height: '100%',
               objectFit: slot.fit,
+              objectPosition: 'center',
               transform: `scale(${slot.zoom}) translate(${slot.offsetX * 20}%, ${slot.offsetY * 20}%) rotate(${slot.rotation}deg)`,
               transformOrigin: 'center'
             }}
@@ -368,21 +373,24 @@ export function SlotView({ slot, page, pageWidth, pageHeight, offsetX, viewWidth
         )}
       </div>
 
-      {/* 8 handles de resize */}
+      {/* 8 handles de resize (más visibles y robustos) */}
       {showHandles && (
         <>
           {(['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'] as HandlePos[]).map(h => {
-            const size = 10;
+            const size = 12;
             const half = size / 2;
             const style: React.CSSProperties = {
               position: 'absolute',
               width: size,
               height: size,
               background: '#e8b04b',
-              border: '1px solid black',
+              border: '2px solid #000',
+              borderRadius: 2,
+              boxShadow: '0 0 0 1px rgba(255,255,255,0.4), 0 2px 6px rgba(0,0,0,0.5)',
               cursor: handleCursors[h],
-              zIndex: 20,
-              pointerEvents: 'auto'
+              zIndex: 999,
+              pointerEvents: 'auto',
+              userSelect: 'none'
             };
             if (h.includes('n')) style.top = -half;
             if (h.includes('s')) style.bottom = -half;
@@ -402,7 +410,6 @@ export function SlotView({ slot, page, pageWidth, pageHeight, offsetX, viewWidth
                 style={style}
                 onMouseDown={e => beginResize(e, h)}
                 onPointerDown={e => {
-                  // Prevenir que el padre capture el evento
                   e.stopPropagation();
                 }}
               />
