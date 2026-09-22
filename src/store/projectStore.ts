@@ -88,7 +88,6 @@ interface UIState {
   selectedTextId: string | null;
   showGuides: boolean;
   showGrid: boolean;
-  /** Mostrar u ocultar los bordes/contornos de los slots (marcos, selection rings, etc.) */
   showSlotBorders: boolean;
   zoom: number;
   panX: number;
@@ -129,6 +128,7 @@ interface StoreState {
   updateSlot: (slotId: string, patch: Partial<Slot>) => void;
   mergeSlots: (slotIds: string[]) => void;
   splitSlot: (slotId: string, direction: 'h' | 'v') => void;
+  addSlot: (pageIndex?: number, init?: Partial<Slot>) => void;
 
   applyTemplateToPage: (templateId: string, pageIndex?: number) => void;
   shuffleCurrentPage: () => void;
@@ -447,6 +447,40 @@ export const useStore = create<StoreState>((set, get) => {
       };
     }),
 
+    addSlot: (pageIndex, init) => set(s => {
+      const project = s.history.present;
+      const idx = pageIndex ?? project.currentPageIndex;
+      const page = project.pages[idx];
+      if (!page) return s;
+
+      const baseW = 40;
+      const baseH = 30;
+
+      const newSlot: Slot = {
+        id: nanoid(8),
+        x: 50 - baseW / 2,
+        y: 50 - baseH / 2,
+        w: baseW,
+        h: baseH,
+        photoId: null,
+        fit: 'contain',
+        offsetX: 0,
+        offsetY: 0,
+        zoom: 1,
+        rotation: 0,
+        locked: false,
+        z: page.slots.length,
+        ...init
+      };
+
+      const updated: Page = { ...page, slots: [...page.slots, newSlot] };
+      const pages = project.pages.map((p, i) => i === idx ? updated : p);
+      return {
+        history: pushHistory(s.history, { ...project, pages, updatedAt: Date.now() }),
+        ui: { ...s.ui, selectedSlotId: newSlot.id, selectedSlotIds: [newSlot.id] }
+      };
+    }),
+
     applyTemplateToPage: (templateId, pageIndex) => set(s => {
       const project = s.history.present;
       const idx = pageIndex ?? project.currentPageIndex;
@@ -604,6 +638,10 @@ export const useStore = create<StoreState>((set, get) => {
 
     // -------------------------------------------------------------
     // Selección
+    // FIX: al seleccionar un slot, forzamos que selectedSlotIds quede
+    // exactamente con [slotId] para que "isPrimary" sea true y aparezcan
+    // los handles de resize. Además, cambiamos currentPageIndex para que
+    // apunte a la página correcta.
     // -------------------------------------------------------------
     select: (slotId, textId) => set(s => {
       const project = s.history.present;
@@ -618,11 +656,15 @@ export const useStore = create<StoreState>((set, get) => {
         if (pageIdx >= 0) newPageIndex = pageIdx;
       }
 
+      // Normalizar selectedSlotIds: si hay slot seleccionado, un solo id.
+      // Si no hay slot, vaciar.
+      const nextSelectedSlotIds = slotId ? [slotId] : [];
+
       return {
         ui: {
           ...s.ui,
           selectedSlotId: slotId,
-          selectedSlotIds: slotId ? [slotId] : [],
+          selectedSlotIds: nextSelectedSlotIds,
           selectedTextId: textId
         },
         history: {
