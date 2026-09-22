@@ -9,7 +9,7 @@ import {
   AlignStartHorizontal, AlignCenterHorizontal, AlignEndHorizontal,
   ArrowLeftToLine, ArrowRightToLine, ArrowUpToLine, ArrowDownToLine,
   MoveHorizontal, MoveVertical, Combine, SplitSquareHorizontal, SplitSquareVertical,
-  Square
+  Square, LayoutGrid
 } from 'lucide-react';
 import { Photo, Slot, Page } from '@/src/types';
 
@@ -22,6 +22,7 @@ export function RightPanel() {
   const updateText = useStore(s => s.updateText);
   const deleteText = useStore(s => s.deleteText);
   const addText = useStore(s => s.addText);
+  const addSlot = useStore(s => s.addSlot);
   const photos = useStore(s => s.history.present.photos);
   const setProject = useStore(s => s.setProject);
   const project = useStore(s => s.history.present);
@@ -84,6 +85,38 @@ export function RightPanel() {
               <button className="btn-outline flex-1 text-xs" onClick={() => updateSlot(slot.id, { zoom: 1, offsetX: 0, offsetY: 0 })}>
                 <Maximize size={12} className="inline" /> Reset
               </button>
+            </div>
+
+            {/* Ajuste de foto dentro del slot */}
+            <div>
+              <div className="text-[10px] text-evr-muted uppercase tracking-wide mb-1.5">
+                Ajuste de la foto
+              </div>
+              <div className="grid grid-cols-3 gap-1">
+                {(['cover', 'contain', 'fill'] as const).map(fit => (
+                  <button
+                    key={fit}
+                    className={`btn-outline text-xs py-1.5 ${
+                      slot.fit === fit ? 'bg-evr-hover border-evr-accent' : ''
+                    }`}
+                    onClick={() => updateSlot(slot.id, { fit })}
+                    title={
+                      fit === 'cover' ? 'Rellenar el slot, recorta si hace falta' :
+                      fit === 'contain' ? 'Ajustar sin recortar (deja márgenes)' :
+                      'Estirar para llenar (puede deformar)'
+                    }
+                  >
+                    {fit === 'cover' ? 'Cover' : fit === 'contain' ? 'Contain' : 'Fill'}
+                  </button>
+                ))}
+              </div>
+              <div className="text-[10px] text-evr-muted mt-1 leading-relaxed">
+                {slot.fit === 'cover'
+                  ? 'La foto llena el slot y se recorta. Ideal para ocupar todo el espacio.'
+                  : slot.fit === 'contain'
+                  ? 'La foto se ve completa dentro del slot, con márgenes. Sin recortes.'
+                  : 'La foto se estira para llenar el slot. Puede deformar.'}
+              </div>
             </div>
 
             {photo && <ResolutionBadge photo={photo} slot={slot} />}
@@ -173,8 +206,38 @@ export function RightPanel() {
         </div>
       </div>
 
+      {/* ----------------------------------------------------------------
+          Diseño libre
+          ---------------------------------------------------------------- */}
       <div className="p-3 border-b border-evr-border">
-        <div className="text-xs font-semibold text-evr-muted uppercase tracking-wide mb-2">Añadir</div>
+        <div className="text-xs font-semibold text-evr-muted uppercase tracking-wide mb-2">
+          Diseño libre
+        </div>
+        <div className="grid grid-cols-2 gap-1">
+          <button
+            className="btn-outline text-xs flex items-center justify-center gap-1"
+            onClick={() => addSlot()}
+            title="Añadir un slot vacío en el centro de la página"
+          >
+            <Square size={12} />
+            + Slot libre
+          </button>
+          <button
+            className="btn-outline text-xs flex items-center justify-center gap-1"
+            onClick={() => addSlot(undefined, { x: 0, y: 0, w: 100, h: 100, fit: 'contain' })}
+            title="Añadir un slot que ocupa toda la página"
+          >
+            <LayoutGrid size={12} />
+            + Full page
+          </button>
+        </div>
+        <div className="text-[10px] text-evr-muted mt-1.5 leading-relaxed">
+          Crea contenedores vacíos y arrastra fotos dentro. Muévelos y redimensiónalos libremente.
+        </div>
+      </div>
+
+      <div className="p-3 border-b border-evr-border">
+        <div className="text-xs font-semibold text-evr-muted uppercase tracking-wide mb-2">Añadir texto</div>
         <div className="grid grid-cols-2 gap-1">
           <button className="btn-outline text-xs" onClick={() => addText({ text: 'Título', fontSize: 36, fontWeight: 700 })}>
             <Type size={12} className="inline" /> Título
@@ -269,7 +332,6 @@ function MergeSplitTools({ slot }: { slot: Slot }) {
         Combinar slots
       </div>
 
-      {/* Unir */}
       <button
         className={`btn-outline w-full text-xs mb-1 flex items-center justify-center gap-1.5 ${
           canMerge ? '' : 'opacity-40 cursor-not-allowed'
@@ -286,7 +348,6 @@ function MergeSplitTools({ slot }: { slot: Slot }) {
         Unir {selectedIds.length >= 2 ? `(${selectedIds.length})` : ''}
       </button>
 
-      {/* Dividir */}
       <div className="grid grid-cols-2 gap-1">
         <button
           className="btn-outline text-xs flex items-center justify-center gap-1"
@@ -306,7 +367,6 @@ function MergeSplitTools({ slot }: { slot: Slot }) {
         </button>
       </div>
 
-      {/* Contador de selección */}
       {selectedIds.length > 1 && (
         <div className="text-[10px] text-evr-accent mt-1.5">
           {selectedIds.length} slots seleccionados
