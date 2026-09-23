@@ -1,8 +1,11 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useStore, useAlbumSize } from '@/src/store/projectStore';
-import { Plus, Copy, Trash2, BookOpen, ArrowLeftRight } from 'lucide-react';
+import {
+  Plus, Copy, Trash2, BookOpen, ArrowLeftRight,
+  ChevronLeft, ChevronRight
+} from 'lucide-react';
 
 export function PageStrip() {
   const project = useStore(s => s.history.present);
@@ -19,6 +22,12 @@ export function PageStrip() {
   //    - project.customSize si sizeId === 'custom'
   const size = useAlbumSize();
 
+  // -------------------------------------------------------------
+  // Refs para scroll de la tira de miniaturas
+  // -------------------------------------------------------------
+  const stripRef = useRef<HTMLDivElement>(null);
+  const itemRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+
   const canDelete =
     project.pages.length > 1 && project.pages[currentIndex]?.kind !== 'cover';
 
@@ -32,13 +41,69 @@ export function PageStrip() {
     currentPage.kind !== 'cover' &&
     currentIndex % 2 === 1;
 
+  // -------------------------------------------------------------
+  // Auto-scroll: cuando cambia la página activa, centrarla en la vista
+  // -------------------------------------------------------------
+  useEffect(() => {
+    const container = stripRef.current;
+    const active = currentPage ? itemRefs.current[currentPage.id] : null;
+    if (!container || !active) return;
+
+    const containerRect = container.getBoundingClientRect();
+    const activeRect = active.getBoundingClientRect();
+
+    // Si la miniatura activa está fuera del viewport, centrarla
+    const isOutLeft = activeRect.left < containerRect.left;
+    const isOutRight = activeRect.right > containerRect.right;
+
+    if (isOutLeft || isOutRight) {
+      active.scrollIntoView({
+        behavior: 'smooth',
+        inline: 'center',
+        block: 'nearest'
+      });
+    }
+  }, [currentIndex, currentPage?.id]);
+
+  // -------------------------------------------------------------
+  // Desplazamiento manual con los botones ◀ / ▶
+  // -------------------------------------------------------------
+  const scrollByAmount = (dir: 'left' | 'right') => {
+    const container = stripRef.current;
+    if (!container) return;
+    const amount = container.clientWidth * 0.7;
+    container.scrollBy({
+      left: dir === 'left' ? -amount : amount,
+      behavior: 'smooth'
+    });
+  };
+
   return (
-    <div className="h-24 md:h-32 bg-evr-panel border-t border-evr-border flex flex-col shrink-0">
+    <div className="h-28 md:h-36 bg-evr-panel border-t border-evr-border flex flex-col shrink-0">
+      {/* ---------- Cabecera con acciones ---------- */}
       <div className="flex items-center justify-between px-3 py-1 border-b border-evr-border">
         <div className="text-[10px] font-semibold text-evr-muted uppercase tracking-wide">
           Páginas ({project.pages.length})
         </div>
         <div className="flex gap-1">
+          {/* Flechas de scroll */}
+          <button
+            className="btn-ghost p-1"
+            onClick={() => scrollByAmount('left')}
+            title="Desplazar páginas a la izquierda"
+          >
+            <ChevronLeft size={13} />
+          </button>
+          <button
+            className="btn-ghost p-1"
+            onClick={() => scrollByAmount('right')}
+            title="Desplazar páginas a la derecha"
+          >
+            <ChevronRight size={13} />
+          </button>
+
+          <div className="w-px h-4 bg-evr-border mx-1 self-center" />
+
           {/* Unir / separar páginas */}
           <button
             className={`btn-ghost p-1 disabled:opacity-30 ${
@@ -96,7 +161,11 @@ export function PageStrip() {
         </div>
       </div>
 
-      <div className="flex-1 flex gap-1 p-2 overflow-x-auto scroll-thin items-stretch">
+      {/* ---------- Tira de miniaturas con scroll ---------- */}
+      <div
+        ref={stripRef}
+        className="flex-1 flex gap-1 p-2 overflow-x-auto overflow-y-hidden scroll-thin items-stretch"
+      >
         {project.pages.map((p, i) => {
           const isCover = p.kind === 'cover';
           const w = size.widthIn * 0.55;
@@ -130,6 +199,9 @@ export function PageStrip() {
           return (
             <React.Fragment key={p.id}>
               <button
+                ref={el => {
+                  itemRefs.current[p.id] = el;
+                }}
                 className={`relative shrink-0 rounded overflow-hidden border-2 transition-colors ${borderClass}`}
                 style={{ width: w * 8, height: h * 8 }}
                 onClick={() => goToPage(i)}
