@@ -1,8 +1,9 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useStore } from '@/src/store/projectStore';
 import { TextElement } from '@/src/types';
+import { FONT_OPTIONS, loadGoogleFont } from '@/src/engine/assets';
 
 interface Props {
   text: TextElement;
@@ -15,6 +16,16 @@ interface Props {
 export function TextElementView({ text, pageWidth, pageHeight, offsetX, selected }: Props) {
   const updateText = useStore(s => s.updateText);
   const select = useStore(s => s.select);
+
+  // -------------------------------------------------------------
+  // Cargar la fuente de este texto si aún no está cargada
+  // -------------------------------------------------------------
+  useEffect(() => {
+    const font = FONT_OPTIONS.find(f => f.family === text.fontFamily);
+    if (font) {
+      loadGoogleFont(font.family, font.weights);
+    }
+  }, [text.fontFamily]);
 
   const left = (text.x / 100) * pageWidth;
   const top = (text.y / 100) * pageHeight;
@@ -41,21 +52,33 @@ export function TextElementView({ text, pageWidth, pageHeight, offsetX, selected
     window.addEventListener('mouseup', onUp);
   };
 
+  // Construimos la lista de familias de respaldo para que el navegador
+  // muestre algo coherente mientras la fuente de Google carga.
+  const fontStack = `"${text.fontFamily}", system-ui, -apple-system, sans-serif`;
+
   return (
     <div
       className={`absolute ${selected ? 'ring-1 ring-evr-accent' : ''}`}
       style={{
-        left, top, width: w,
+        left,
+        top,
+        width: w,
         cursor: text.locked ? 'not-allowed' : 'move',
         color: text.color,
-        fontFamily: text.fontFamily,
+        fontFamily: fontStack,
         fontSize: `${(text.fontSize * 96) / 72}px`,
         fontWeight: text.fontWeight,
         textAlign: text.align,
         lineHeight: text.lineHeight,
         letterSpacing: `${text.tracking}px`,
         whiteSpace: 'pre-wrap',
-        userSelect: 'none'
+        userSelect: 'none',
+        // Mejora el renderizado de fuentes serif/display en pantallas
+        WebkitFontSmoothing: 'antialiased',
+        MozOsxFontSmoothing: 'grayscale',
+        // Preserva mejor el aspecto visual de fuentes decorativas
+        fontFeatureSettings: 'normal',
+        fontKerning: 'normal'
       }}
       onMouseDown={onMouseDown}
     >
