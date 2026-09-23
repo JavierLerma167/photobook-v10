@@ -227,12 +227,17 @@ export default function Page() {
   return (
     <div className="h-screen flex flex-col bg-evr-bg text-evr-text">
       <TopBar />
-      <div className="flex-1 flex min-h-0">
+
+      {/* ✅ min-w-0 en el contenedor central: permite que el PageStrip
+          active su scroll horizontal en lugar de empujar al RightPanel. */}
+      <div className="flex-1 flex min-h-0 min-w-0">
         {leftPanelOpen && <PhotoLibrary />}
-        <div className="flex-1 flex flex-col min-h-0">
+
+        <div className="flex-1 flex flex-col min-h-0 min-w-0">
           <Canvas />
           <PageStrip />
         </div>
+
         {rightPanelOpen && <RightPanel />}
       </div>
 
