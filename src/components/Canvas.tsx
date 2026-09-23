@@ -14,6 +14,7 @@ export function Canvas() {
   const ref = useRef<HTMLDivElement>(null);
   const [panning, setPanning] = useState(false);
   const [spaceHeld, setSpaceHeld] = useState(false);
+  const [zoomDraft, setZoomDraft] = useState<string>('');
 
   const onWheel = (e: React.WheelEvent) => {
     if (e.ctrlKey || e.metaKey) {
@@ -56,6 +57,13 @@ export function Canvas() {
     }
   };
 
+  // ---- Handlers del zoom editable ----
+  const applyZoom = (v: number) => {
+    setUI({ zoom: Math.max(0.1, Math.min(3, v)) });
+  };
+
+  const zoomPercent = Math.round(zoom * 100);
+
   return (
     <div
       ref={ref}
@@ -86,9 +94,69 @@ export function Canvas() {
         <Spread size={size} zoom={zoom} />
       </div>
 
-      {/* Indicador de zoom */}
-      <div className="absolute bottom-3 right-3 bg-evr-panel border border-evr-border rounded px-2 py-1 text-xs text-evr-muted">
-        {Math.round(zoom * 100)}%
+      {/* ---------------------------------------------------------------- */}
+      {/* Zoom editable: − [input] % +                                      */}
+      {/* ---------------------------------------------------------------- */}
+      <div className="absolute bottom-3 right-3 bg-evr-panel border border-evr-border rounded flex items-center shadow-lg overflow-hidden">
+        {/* Botón − */}
+        <button
+          className="w-7 h-7 flex items-center justify-center text-evr-text hover:bg-evr-hover transition-colors"
+          onClick={() => applyZoom(zoom - 0.1)}
+          title="Reducir zoom (−10%)"
+        >
+          <span className="text-base leading-none">−</span>
+        </button>
+
+        {/* Input numérico */}
+        <div className="flex items-center border-x border-evr-border">
+          <input
+            type="number"
+            className="w-12 h-7 bg-transparent text-center text-xs text-evr-text outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            value={zoomDraft !== '' ? zoomDraft : zoomPercent}
+            min={10}
+            max={300}
+            step={5}
+            onChange={e => {
+              setZoomDraft(e.target.value);
+            }}
+            onBlur={() => {
+              const v = parseFloat(zoomDraft);
+              if (!isNaN(v)) applyZoom(v / 100);
+              setZoomDraft('');
+            }}
+            onKeyDown={e => {
+              if (e.key === 'Enter') {
+                const v = parseFloat(zoomDraft);
+                if (!isNaN(v)) applyZoom(v / 100);
+                setZoomDraft('');
+                (e.target as HTMLInputElement).blur();
+              } else if (e.key === 'Escape') {
+                setZoomDraft('');
+                (e.target as HTMLInputElement).blur();
+              }
+            }}
+            title="Zoom (%)"
+          />
+          <span className="text-[10px] text-evr-muted pr-1">%</span>
+        </div>
+
+        {/* Botón + */}
+        <button
+          className="w-7 h-7 flex items-center justify-center text-evr-text hover:bg-evr-hover transition-colors"
+          onClick={() => applyZoom(zoom + 0.1)}
+          title="Aumentar zoom (+10%)"
+        >
+          <span className="text-base leading-none">+</span>
+        </button>
+
+        {/* Reset a 100% (doble clic en el % o botón pequeño) */}
+        <button
+          className="w-7 h-7 flex items-center justify-center text-[10px] text-evr-muted hover:bg-evr-hover hover:text-evr-text transition-colors border-l border-evr-border"
+          onClick={() => applyZoom(0.5)}
+          title="Restablecer a 50%"
+        >
+          ½
+        </button>
       </div>
     </div>
   );
