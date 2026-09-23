@@ -79,7 +79,9 @@ export function PageStrip() {
   };
 
   return (
-    <div className="h-28 md:h-36 bg-evr-panel border-t border-evr-border flex flex-col shrink-0">
+    // ✅ min-w-0 en el wrapper: permite que el componente se encoja
+    //    cuando hay muchas páginas, en lugar de empujar al RightPanel.
+    <div className="h-28 md:h-36 bg-evr-panel border-t border-evr-border flex flex-col shrink-0 min-w-0">
       {/* ---------- Cabecera con acciones ---------- */}
       <div className="flex items-center justify-between px-3 py-1 border-b border-evr-border">
         <div className="text-[10px] font-semibold text-evr-muted uppercase tracking-wide">
@@ -162,9 +164,11 @@ export function PageStrip() {
       </div>
 
       {/* ---------- Tira de miniaturas con scroll ---------- */}
+      {/* ✅ min-w-0 aquí también: refuerza el encogimiento para que
+          overflow-x-auto funcione sin empujar al RightPanel. */}
       <div
         ref={stripRef}
-        className="flex-1 flex gap-1 p-2 overflow-x-auto overflow-y-hidden scroll-thin items-stretch"
+        className="flex-1 flex gap-1 p-2 overflow-x-auto overflow-y-hidden scroll-thin items-stretch min-w-0"
       >
         {project.pages.map((p, i) => {
           const isCover = p.kind === 'cover';
