@@ -89,6 +89,8 @@ interface UIState {
   showGuides: boolean;
   showGrid: boolean;
   showSlotBorders: boolean;
+  leftPanelOpen: boolean;
+  rightPanelOpen: boolean;
   zoom: number;
   panX: number;
   panY: number;
@@ -162,6 +164,8 @@ export const useStore = create<StoreState>((set, get) => {
       showGuides: true,
       showGrid: false,
       showSlotBorders: true,
+      leftPanelOpen: true,
+      rightPanelOpen: true,
       zoom: 0.5,
       panX: 0,
       panY: 0,
@@ -638,10 +642,6 @@ export const useStore = create<StoreState>((set, get) => {
 
     // -------------------------------------------------------------
     // Selección
-    // FIX: al seleccionar un slot, forzamos que selectedSlotIds quede
-    // exactamente con [slotId] para que "isPrimary" sea true y aparezcan
-    // los handles de resize. Además, cambiamos currentPageIndex para que
-    // apunte a la página correcta.
     // -------------------------------------------------------------
     select: (slotId, textId) => set(s => {
       const project = s.history.present;
@@ -656,8 +656,6 @@ export const useStore = create<StoreState>((set, get) => {
         if (pageIdx >= 0) newPageIndex = pageIdx;
       }
 
-      // Normalizar selectedSlotIds: si hay slot seleccionado, un solo id.
-      // Si no hay slot, vaciar.
       const nextSelectedSlotIds = slotId ? [slotId] : [];
 
       return {
