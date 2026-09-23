@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { useStore, ALBUM_SIZES } from '@/src/store/projectStore';
+import { useStore, useAlbumSize } from '@/src/store/projectStore';
 import { runPreflight } from '@/src/engine/preflight';
 import { X, AlertCircle, AlertTriangle, CheckCircle } from 'lucide-react';
 import { PreflightIssue } from '@/src/types';
@@ -14,9 +14,12 @@ export function PreflightPanel() {
   const goToPage = useStore(s => s.goToPage);
   const select = useStore(s => s.select);
 
+  // ✅ useAlbumSize() SIEMPRE se llama antes del early return.
+  //    Devuelve el AlbumSize activo (preset o project.customSize).
+  const size = useAlbumSize();
+
   if (!open) return null;
 
-  const size = ALBUM_SIZES[project.sizeId];
   const profile = profiles.find(p => p.id === project.printProfileId) ?? profiles[0];
   const issues = runPreflight(project, size, profile);
 
@@ -34,7 +37,10 @@ export function PreflightPanel() {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/70 z-40 flex items-center justify-center p-8" onClick={() => setUI({ preflightOpen: false })}>
+    <div
+      className="fixed inset-0 bg-black/70 z-40 flex items-center justify-center p-8"
+      onClick={() => setUI({ preflightOpen: false })}
+    >
       <div
         className="bg-evr-panel border border-evr-border rounded-lg w-full max-w-2xl max-h-[80vh] flex flex-col"
         onClick={e => e.stopPropagation()}
@@ -46,7 +52,10 @@ export function PreflightPanel() {
               {size.label} · {profile.name} · {profile.dpi} DPI
             </div>
           </div>
-          <button className="btn-ghost p-1" onClick={() => setUI({ preflightOpen: false })}>
+          <button
+            className="btn-ghost p-1"
+            onClick={() => setUI({ preflightOpen: false })}
+          >
             <X size={16} />
           </button>
         </div>
@@ -65,13 +74,21 @@ export function PreflightPanel() {
               onClick={() => jumpTo(issue)}
             >
               <div className="mt-0.5">
-                {issue.level === 'error' && <AlertCircle size={14} className="text-red-500" />}
-                {issue.level === 'warning' && <AlertTriangle size={14} className="text-amber-500" />}
-                {issue.level === 'ok' && <CheckCircle size={14} className="text-green-500" />}
+                {issue.level === 'error' && (
+                  <AlertCircle size={14} className="text-red-500" />
+                )}
+                {issue.level === 'warning' && (
+                  <AlertTriangle size={14} className="text-amber-500" />
+                )}
+                {issue.level === 'ok' && (
+                  <CheckCircle size={14} className="text-green-500" />
+                )}
               </div>
               <div className="flex-1">
                 <div className="text-sm">{issue.message}</div>
-                <div className="text-[10px] text-evr-muted mt-0.5">{issue.category}</div>
+                <div className="text-[10px] text-evr-muted mt-0.5">
+                  {issue.category}
+                </div>
               </div>
             </button>
           ))}
@@ -81,11 +98,23 @@ export function PreflightPanel() {
   );
 }
 
-function StatCard({ label, count, color }: { label: string; count: number; color: string }) {
+function StatCard({
+  label,
+  count,
+  color
+}: {
+  label: string;
+  count: number;
+  color: string;
+}) {
   return (
     <div className="bg-evr-bg border border-evr-border rounded p-2 text-center">
-      <div className="text-2xl font-semibold" style={{ color }}>{count}</div>
-      <div className="text-[10px] text-evr-muted uppercase tracking-wide">{label}</div>
+      <div className="text-2xl font-semibold" style={{ color }}>
+        {count}
+      </div>
+      <div className="text-[10px] text-evr-muted uppercase tracking-wide">
+        {label}
+      </div>
     </div>
   );
 }
