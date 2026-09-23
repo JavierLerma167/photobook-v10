@@ -179,6 +179,10 @@ interface StoreState {
 // ============================================================
 
 export const useStore = create<StoreState>((set, get) => {
+  // ------------------------------------------------------------
+  // 4.2 / 4.3 — Proyecto inicial + newProject
+  // Ahora `createProject` recibe un AlbumSize completo.
+  // ------------------------------------------------------------
   const initialProject = createProject('Sin título', ALBUM_SIZES['10x10']);
 
   return {
@@ -205,7 +209,8 @@ export const useStore = create<StoreState>((set, get) => {
     profiles: DEFAULT_PROFILES,
 
     // -------------------------------------------------------------
-    // NUEVO PROYECTO (acepta AlbumSize completo)
+    // 4.3 — NUEVO PROYECTO
+    // Acepta un AlbumSize completo (preset o personalizado).
     // -------------------------------------------------------------
     newProject: (name, size) => set(s => ({
       history: pushHistory(s.history, createProject(name, size)),
@@ -776,7 +781,8 @@ function replacePage(project: Project, page: Page): Project {
 }
 
 // ============================================================
-// HOOKS
+// 4.1 — HOOK useAlbumSize
+// Devuelve el AlbumSize activo, ya sea un preset o un customSize.
 // ============================================================
 
 export const useCurrentProject = () => useStore(s => s.history.present);
