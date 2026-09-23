@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { useStore, ALBUM_SIZES } from '@/src/store/projectStore';
+import { useStore, useAlbumSize } from '@/src/store/projectStore';
 import { X, Download } from 'lucide-react';
 import { exportProjectToPdf, exportPageToJpeg } from '@/src/utils/pdfExport';
 
@@ -9,7 +9,11 @@ export function ExportDialog() {
   const open = useStore(s => s.ui.exportOpen);
   const setUI = useStore(s => s.setUI);
   const project = useStore(s => s.history.present);
-  const size = ALBUM_SIZES[project.sizeId];
+  // ✅ useAlbumSize() devuelve el AlbumSize activo:
+  //    - un preset de ALBUM_SIZES si sizeId !== 'custom'
+  //    - project.customSize si sizeId === 'custom'
+  const size = useAlbumSize();
+
   const [dpi, setDpi] = useState(300);
   const [includeGuides, setIncludeGuides] = useState(false);
   const [busy, setBusy] = useState(false);
