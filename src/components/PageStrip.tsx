@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { useStore, ALBUM_SIZES } from '@/src/store/projectStore';
+import { useStore, useAlbumSize } from '@/src/store/projectStore';
 import { Plus, Copy, Trash2, BookOpen, ArrowLeftRight } from 'lucide-react';
 
 export function PageStrip() {
@@ -13,7 +13,11 @@ export function PageStrip() {
   const duplicatePage = useStore(s => s.duplicatePage);
   const deletePage = useStore(s => s.deletePage);
   const togglePageSpan = useStore(s => s.togglePageSpan);
-  const size = ALBUM_SIZES[project.sizeId];
+
+  // ✅ useAlbumSize() devuelve el AlbumSize activo:
+  //    - un preset si sizeId !== 'custom'
+  //    - project.customSize si sizeId === 'custom'
+  const size = useAlbumSize();
 
   const canDelete = project.pages.length > 1 && project.pages[currentIndex]?.kind !== 'cover';
 
