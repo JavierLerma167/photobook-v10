@@ -44,7 +44,7 @@ export function PhotoLibrary() {
 
   return (
     <div
-      className="w-64 bg-evr-panel border-r border-evr-border flex flex-col shrink-0"
+      className="w-52 lg:w-64 bg-evr-panel border-r border-evr-border flex flex-col shrink-0"
       onDragOver={e => { e.preventDefault(); setDragOver(true); }}
       onDragLeave={() => setDragOver(false)}
       onDrop={onDrop}
