@@ -28,7 +28,7 @@ export function PageStrip() {
     currentIndex % 2 === 1;
 
   return (
-    <div className="h-32 bg-evr-panel border-t border-evr-border flex flex-col shrink-0">
+    <div className="h-24 md:h-32 bg-evr-panel border-t border-evr-border flex flex-col shrink-0">
       <div className="flex items-center justify-between px-3 py-1 border-b border-evr-border">
         <div className="text-[10px] font-semibold text-evr-muted uppercase tracking-wide">
           Páginas ({project.pages.length})
