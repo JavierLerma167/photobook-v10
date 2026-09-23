@@ -4,7 +4,7 @@ import React, { useRef } from 'react';
 import { useStore } from '@/src/store/projectStore';
 import {
   FilePlus, Save, Undo2, Redo2, LayoutTemplate, Wand2,
-  ShieldCheck, Download, Grid3x3, Square
+  ShieldCheck, Download, Grid3x3, Square, PanelLeft, PanelRight
 } from 'lucide-react';
 
 export function TopBar() {
@@ -19,6 +19,8 @@ export function TopBar() {
   const showGrid = useStore(s => s.ui.showGrid);
   const showGuides = useStore(s => s.ui.showGuides);
   const showSlotBorders = useStore(s => s.ui.showSlotBorders);
+  const leftPanelOpen = useStore(s => s.ui.leftPanelOpen);
+  const rightPanelOpen = useStore(s => s.ui.rightPanelOpen);
   const autoDesign = useStore(s => s.autoDesign);
   const photos = useStore(s => s.history.present.photos);
 
@@ -37,8 +39,8 @@ export function TopBar() {
   };
 
   return (
-    <div className="h-12 bg-evr-panel border-b border-evr-border flex items-center px-3 gap-2 shrink-0">
-      <div className="flex items-center gap-2 pr-3 border-r border-evr-border">
+    <div className="h-12 bg-evr-panel border-b border-evr-border flex items-center px-3 gap-2 shrink-0 overflow-x-auto scroll-thin">
+      <div className="flex items-center gap-2 pr-3 border-r border-evr-border shrink-0">
         <div className="w-6 h-6 rounded bg-evr-accent flex items-center justify-center text-black font-bold text-xs">E</div>
         <span className="text-sm font-semibold">EVR Album</span>
       </div>
@@ -46,7 +48,7 @@ export function TopBar() {
       {editingName ? (
         <input
           ref={inputRef}
-          className="input text-sm"
+          className="input text-sm shrink-0"
           value={nameDraft}
           onChange={e => setNameDraft(e.target.value)}
           onBlur={() => { renameProject(nameDraft || 'Sin título'); setEditingName(false); }}
@@ -56,45 +58,69 @@ export function TopBar() {
       ) : (
         <button
           onClick={() => { setNameDraft(projectName); setEditingName(true); }}
-          className="text-sm text-evr-muted hover:text-evr-text px-2"
+          className="text-sm text-evr-muted hover:text-evr-text px-2 shrink-0"
         >
           {projectName}
         </button>
       )}
 
-      <div className="w-px h-6 bg-evr-border mx-1" />
+      <div className="w-px h-6 bg-evr-border mx-1 shrink-0" />
 
-      <button className="btn-ghost flex items-center gap-1.5" onClick={() => setUI({ newProjectOpen: true })}>
+      {/* ----------------------------------------------------------------
+          Toggle panel izquierdo (Biblioteca)
+          ---------------------------------------------------------------- */}
+      <button
+        className={`btn-ghost flex items-center gap-1.5 shrink-0 ${leftPanelOpen ? 'bg-evr-hover' : ''}`}
+        onClick={() => setUI({ leftPanelOpen: !leftPanelOpen })}
+        title={leftPanelOpen ? 'Ocultar biblioteca' : 'Mostrar biblioteca'}
+      >
+        <PanelLeft size={15} />
+      </button>
+
+      {/* ----------------------------------------------------------------
+          Toggle panel derecho (Propiedades)
+          ---------------------------------------------------------------- */}
+      <button
+        className={`btn-ghost flex items-center gap-1.5 shrink-0 ${rightPanelOpen ? 'bg-evr-hover' : ''}`}
+        onClick={() => setUI({ rightPanelOpen: !rightPanelOpen })}
+        title={rightPanelOpen ? 'Ocultar propiedades' : 'Mostrar propiedades'}
+      >
+        <PanelRight size={15} />
+      </button>
+
+      <div className="w-px h-6 bg-evr-border mx-1 shrink-0" />
+
+      <button className="btn-ghost flex items-center gap-1.5 shrink-0" onClick={() => setUI({ newProjectOpen: true })}>
         <FilePlus size={15} /> Nuevo
       </button>
-      <button className="btn-ghost flex items-center gap-1.5" onClick={saveLocal}>
+      <button className="btn-ghost flex items-center gap-1.5 shrink-0" onClick={saveLocal}>
         <Save size={15} /> Guardar
       </button>
       <button
-        className="btn-ghost flex items-center gap-1.5 disabled:opacity-40"
+        className="btn-ghost flex items-center gap-1.5 disabled:opacity-40 shrink-0"
         onClick={undo}
         disabled={!canUndo}
       >
         <Undo2 size={15} />
       </button>
       <button
-        className="btn-ghost flex items-center gap-1.5 disabled:opacity-40"
+        className="btn-ghost flex items-center gap-1.5 disabled:opacity-40 shrink-0"
         onClick={redo}
         disabled={!canRedo}
       >
         <Redo2 size={15} />
       </button>
 
-      <div className="w-px h-6 bg-evr-border mx-1" />
+      <div className="w-px h-6 bg-evr-border mx-1 shrink-0" />
 
       <button
-        className="btn-ghost flex items-center gap-1.5"
+        className="btn-ghost flex items-center gap-1.5 shrink-0"
         onClick={() => setUI({ templateGalleryOpen: true })}
       >
         <LayoutTemplate size={15} /> Plantillas
       </button>
       <button
-        className="btn-ghost flex items-center gap-1.5 disabled:opacity-40"
+        className="btn-ghost flex items-center gap-1.5 disabled:opacity-40 shrink-0"
         disabled={!canAutoDesign}
         onClick={handleAutoDesign}
         title={
@@ -107,18 +133,18 @@ export function TopBar() {
       >
         <Wand2 size={15} /> Auto Design
       </button>
-      <button className="btn-ghost flex items-center gap-1.5" onClick={() => setUI({ preflightOpen: true })}>
+      <button className="btn-ghost flex items-center gap-1.5 shrink-0" onClick={() => setUI({ preflightOpen: true })}>
         <ShieldCheck size={15} /> Preflight
       </button>
-      <button className="btn-ghost flex items-center gap-1.5" onClick={() => setUI({ exportOpen: true })}>
+      <button className="btn-ghost flex items-center gap-1.5 shrink-0" onClick={() => setUI({ exportOpen: true })}>
         <Download size={15} /> Exportar
       </button>
 
-      <div className="flex-1" />
+      <div className="flex-1 min-w-[12px]" />
 
       {/* Botón cuadrícula */}
       <button
-        className={`btn-ghost flex items-center gap-1.5 ${showGrid ? 'bg-evr-hover' : ''}`}
+        className={`btn-ghost flex items-center gap-1.5 shrink-0 ${showGrid ? 'bg-evr-hover' : ''}`}
         onClick={() => setUI({ showGrid: !showGrid })}
         title="Mostrar cuadrícula"
       >
@@ -127,7 +153,7 @@ export function TopBar() {
 
       {/* Botón bordes de slots */}
       <button
-        className={`btn-ghost flex items-center gap-1.5 ${showSlotBorders ? 'bg-evr-hover' : ''}`}
+        className={`btn-ghost flex items-center gap-1.5 shrink-0 ${showSlotBorders ? 'bg-evr-hover' : ''}`}
         onClick={() => setUI({ showSlotBorders: !showSlotBorders })}
         title={showSlotBorders ? 'Ocultar bordes de slots' : 'Mostrar bordes de slots'}
       >
@@ -136,7 +162,7 @@ export function TopBar() {
 
       {/* Botón guías */}
       <button
-        className={`btn-ghost flex items-center gap-1.5 ${showGuides ? 'bg-evr-hover' : ''}`}
+        className={`btn-ghost flex items-center gap-1.5 shrink-0 ${showGuides ? 'bg-evr-hover' : ''}`}
         onClick={() => setUI({ showGuides: !showGuides })}
         title="Mostrar guías de impresión"
       >
