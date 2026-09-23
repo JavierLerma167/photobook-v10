@@ -11,6 +11,7 @@ import { PreflightPanel } from '@/src/components/PreflightPanel';
 import { ExportDialog } from '@/src/components/ExportDialog';
 import { NewProjectDialog } from '@/src/components/NewProjectDialog';
 import { useStore } from '@/src/store/projectStore';
+import { loadAllFonts } from '@/src/engine/assets';
 
 export default function Page() {
   const undo = useStore(s => s.undo);
@@ -24,6 +25,13 @@ export default function Page() {
   const prevSpread = useStore(s => s.prevSpread);
   const leftPanelOpen = useStore(s => s.ui.leftPanelOpen);
   const rightPanelOpen = useStore(s => s.ui.rightPanelOpen);
+
+  // -------------------------------------------------------------
+  // Cargar todas las fuentes de Google Fonts al inicio
+  // -------------------------------------------------------------
+  useEffect(() => {
+    loadAllFonts();
+  }, []);
 
   // -------------------------------------------------------------
   // Autosave cada 30s + al cerrar la pestaña
