@@ -3,13 +3,14 @@
 import React from 'react';
 import { useStore, useCurrentPage, useAlbumSize } from '@/src/store/projectStore';
 import { computeEffectiveDpi, QUALITY_COLOR, QUALITY_LABEL } from '@/src/engine/resolution';
+import { TEXTURES, FONT_OPTIONS, loadGoogleFont } from '@/src/engine/assets';
 import {
   Lock, Unlock, Trash2, Maximize, RotateCw, Type, Image as ImageIcon,
   AlignStartVertical, AlignCenterVertical, AlignEndVertical,
   AlignStartHorizontal, AlignCenterHorizontal, AlignEndHorizontal,
   ArrowLeftToLine, ArrowRightToLine, ArrowUpToLine, ArrowDownToLine,
   MoveHorizontal, MoveVertical, Combine, SplitSquareHorizontal, SplitSquareVertical,
-  Square, LayoutGrid, Box
+  Square, LayoutGrid, Box, Upload
 } from 'lucide-react';
 import { Photo, Slot, Page } from '@/src/types';
 
@@ -31,13 +32,48 @@ export function RightPanel() {
   const showSlotBorders = useStore(s => s.ui.showSlotBorders);
   const setUI = useStore(s => s.setUI);
 
+  // Estado local para las pestañas de fondo
+  const [bgTab, setBgTab] = React.useState<'color' | 'textures' | 'custom'>('color');
+  const customBgInputRef = React.useRef<HTMLInputElement>(null);
+
   const slot = page.slots.find(s => s.id === selectedSlotId);
   const text = page.texts.find(t => t.id === selectedTextId);
   const photo = slot?.photoId ? photos.find(p => p.id === slot.photoId) : null;
 
-  const setBackground = (c: string) => {
-    const pages = project.pages.map((pg, i) => i === project.currentPageIndex ? { ...pg, background: c } : pg);
+  // -------------------------------------------------------------
+  // Actualiza un patch a la página actual
+  // -------------------------------------------------------------
+  const updateCurrentPage = (patch: Partial<Page>) => {
+    const pages = project.pages.map((pg, i) =>
+      i === project.currentPageIndex ? { ...pg, ...patch } : pg
+    );
     setProject({ ...project, pages });
+  };
+
+  // Color de fondo (y opcionalmente limpia la imagen)
+  const setBackground = (c: string, imageUrl: string | null = null) => {
+    updateCurrentPage({ background: c, backgroundImage: imageUrl });
+  };
+
+  // Imagen de fondo
+  const setBackgroundImage = (url: string | null) => {
+    updateCurrentPage({
+      backgroundImage: url,
+      backgroundImageFit: url ? (page.backgroundImageFit || 'cover') : undefined,
+      backgroundImageOpacity: url ? (page.backgroundImageOpacity ?? 1) : undefined,
+    });
+  };
+
+  const setBackgroundImageFit = (fit: 'cover' | 'contain' | 'repeat') => {
+    updateCurrentPage({ backgroundImageFit: fit });
+  };
+
+  const setBackgroundImageOpacity = (op: number) => {
+    updateCurrentPage({ backgroundImageOpacity: op });
+  };
+
+  const setBackgroundOverlay = (color: string | null) => {
+    updateCurrentPage({ backgroundOverlay: color });
   };
 
   return (
@@ -121,10 +157,7 @@ export function RightPanel() {
 
             {photo && <ResolutionBadge photo={photo} slot={slot} />}
 
-            {/* Unir / Dividir slots */}
             <MergeSplitTools slot={slot} />
-
-            {/* Alineación y distribución */}
             <AlignTools slot={slot} page={page} />
           </div>
         )}
@@ -140,6 +173,28 @@ export function RightPanel() {
               value={text.text}
               onChange={e => updateText(text.id, { text: e.target.value })}
             />
+
+            {/* Selector de fuente */}
+            <div>
+              <label className="text-[10px] text-evr-muted block mb-1">Fuente</label>
+              <select
+                className="input w-full text-xs"
+                value={text.fontFamily}
+                onChange={e => {
+                  const family = e.target.value;
+                  const font = FONT_OPTIONS.find(f => f.family === family);
+                  if (font) loadGoogleFont(font.family, font.weights);
+                  updateText(text.id, { fontFamily: family });
+                }}
+              >
+                {FONT_OPTIONS.map(font => (
+                  <option key={font.family} value={font.family}>
+                    {font.family} ({font.category})
+                  </option>
+                ))}
+              </select>
+            </div>
+
             <div className="grid grid-cols-2 gap-2">
               <NumberField label="X %" value={text.x} onChange={v => updateText(text.id, { x: v })} />
               <NumberField label="Y %" value={text.y} onChange={v => updateText(text.id, { y: v })} />
@@ -189,7 +244,6 @@ export function RightPanel() {
       <div className="p-3 border-b border-evr-border">
         <div className="text-xs font-semibold text-evr-muted uppercase tracking-wide mb-2">Vista</div>
 
-        {/* Toggle de bordes (ahora con icono Box en vez de Square) */}
         <label className="flex items-center gap-2 cursor-pointer select-none">
           <input
             type="checkbox"
@@ -254,62 +308,264 @@ export function RightPanel() {
         </div>
       </div>
 
+      {/* ----------------------------------------------------------------
+          Fondo de página
+          ---------------------------------------------------------------- */}
       <div className="p-3">
-        <div className="text-xs font-semibold text-evr-muted uppercase tracking-wide mb-2">Fondo de página</div>
-
-        {/* Paleta ampliada: 24 colores predefinidos en grid 6x4 */}
-        <div className="grid grid-cols-6 gap-1.5 mb-2">
-          {[
-            // Blancos y cremas
-            '#ffffff', '#faf7f2', '#f5f1ea', '#e8e4dc', '#d4cfc4', '#c9b8a0',
-            // Grises y negros
-            '#9ca3af', '#4b5563', '#1f2937', '#0f1115', '#000000', '#0a0c10',
-            // Colores suaves
-            '#fef3c7', '#dbeafe', '#fce7f3', '#dcfce7', '#ede9fe', '#ffedd5',
-            // Colores intensos
-            '#78350f', '#7c2d12', '#831843', '#4c1d95', '#1e3a5f', '#064e3b',
-          ].map(c => (
-            <button
-              key={c}
-              className={`w-full aspect-square rounded border-2 transition-all ${
-                page.background === c
-                  ? 'border-evr-accent scale-110 shadow-lg'
-                  : 'border-evr-border hover:border-evr-muted'
-              }`}
-              style={{ background: c }}
-              onClick={() => setBackground(c)}
-              title={c}
-            />
-          ))}
+        <div className="text-xs font-semibold text-evr-muted uppercase tracking-wide mb-2">
+          Fondo de página
         </div>
 
-        {/* Selector de color personalizado + reset */}
-        <div className="flex items-center gap-2">
-          <div className="flex-1 flex items-center gap-2">
-            <label className="text-[10px] text-evr-muted whitespace-nowrap">Personalizado</label>
-            <input
-              type="color"
-              value={page.background || '#ffffff'}
-              onChange={e => setBackground(e.target.value)}
-              className="flex-1 h-7 cursor-pointer rounded border border-evr-border bg-transparent"
-            />
-          </div>
+        {/* Pestañas: Color / Texturas / Imagen */}
+        <div className="grid grid-cols-3 gap-1 mb-3">
           <button
-            className="btn-outline text-[10px] px-2 py-1"
-            onClick={() => setBackground('#ffffff')}
-            title="Restablecer a blanco"
+            className={`btn-outline text-xs py-1 ${bgTab === 'color' ? 'bg-evr-hover border-evr-accent' : ''}`}
+            onClick={() => setBgTab('color')}
           >
-            Reset
+            Color
+          </button>
+          <button
+            className={`btn-outline text-xs py-1 ${bgTab === 'textures' ? 'bg-evr-hover border-evr-accent' : ''}`}
+            onClick={() => setBgTab('textures')}
+          >
+            Texturas
+          </button>
+          <button
+            className={`btn-outline text-xs py-1 ${bgTab === 'custom' ? 'bg-evr-hover border-evr-accent' : ''}`}
+            onClick={() => setBgTab('custom')}
+          >
+            Imagen
           </button>
         </div>
 
-        {/* Muestra el color actual con su código hex */}
-        <div className="mt-2 flex items-center gap-2 text-[10px] text-evr-muted">
+        {/* -------- Pestaña: Color -------- */}
+        {bgTab === 'color' && (
+          <>
+            <div className="grid grid-cols-6 gap-1.5 mb-2">
+              {[
+                '#ffffff', '#faf7f2', '#f5f1ea', '#e8e4dc', '#d4cfc4', '#c9b8a0',
+                '#9ca3af', '#4b5563', '#1f2937', '#0f1115', '#000000', '#0a0c10',
+                '#fef3c7', '#dbeafe', '#fce7f3', '#dcfce7', '#ede9fe', '#ffedd5',
+                '#78350f', '#7c2d12', '#831843', '#4c1d95', '#1e3a5f', '#064e3b',
+              ].map(c => (
+                <button
+                  key={c}
+                  className={`w-full aspect-square rounded border-2 transition-all ${
+                    page.background === c && !page.backgroundImage
+                      ? 'border-evr-accent scale-110 shadow-lg'
+                      : 'border-evr-border hover:border-evr-muted'
+                  }`}
+                  style={{ background: c }}
+                  onClick={() => setBackground(c, null)}
+                  title={c}
+                />
+              ))}
+            </div>
+
+            <div className="flex items-center gap-2">
+              <div className="flex-1 flex items-center gap-2">
+                <label className="text-[10px] text-evr-muted whitespace-nowrap">Personalizado</label>
+                <input
+                  type="color"
+                  value={page.background || '#ffffff'}
+                  onChange={e => setBackground(e.target.value, null)}
+                  className="flex-1 h-7 cursor-pointer rounded border border-evr-border bg-transparent"
+                />
+              </div>
+              <button
+                className="btn-outline text-[10px] px-2 py-1"
+                onClick={() => setBackground('#ffffff', null)}
+                title="Restablecer a blanco"
+              >
+                Reset
+              </button>
+            </div>
+          </>
+        )}
+
+        {/* -------- Pestaña: Texturas -------- */}
+        {bgTab === 'textures' && (
+          <>
+            <div className="grid grid-cols-3 gap-1.5 mb-2 max-h-64 overflow-y-auto scroll-thin">
+              {TEXTURES.map(tex => {
+                const isActive = page.backgroundImage === tex.url;
+                return (
+                  <button
+                    key={tex.id}
+                    className={`relative aspect-square rounded overflow-hidden border-2 transition-all ${
+                      isActive ? 'border-evr-accent scale-105 shadow-lg' : 'border-evr-border hover:border-evr-muted'
+                    }`}
+                    onClick={() => setBackgroundImage(tex.url)}
+                    title={tex.name}
+                  >
+                    <img src={tex.preview} alt={tex.name} className="w-full h-full object-cover" />
+                    <div className="absolute bottom-0 left-0 right-0 bg-black/70 text-white text-[8px] py-0.5 text-center truncate px-0.5">
+                      {tex.name}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {page.backgroundImage && (
+              <button
+                className="btn-outline w-full text-xs mb-2"
+                onClick={() => setBackgroundImage(null)}
+              >
+                Quitar textura
+              </button>
+            )}
+          </>
+        )}
+
+        {/* -------- Pestaña: Imagen personalizada -------- */}
+        {bgTab === 'custom' && (
+          <>
+            <input
+              ref={customBgInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={async e => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = () => {
+                  if (typeof reader.result === 'string') {
+                    setBackgroundImage(reader.result);
+                  }
+                };
+                reader.readAsDataURL(file);
+                e.target.value = '';
+              }}
+            />
+            <button
+              className="btn-outline w-full text-xs mb-2 flex items-center justify-center gap-1"
+              onClick={() => customBgInputRef.current?.click()}
+            >
+              <Upload size={12} /> Subir imagen de fondo
+            </button>
+
+            {page.backgroundImage && !TEXTURES.some(t => t.url === page.backgroundImage) && (
+              <>
+                <div className="aspect-[1.4/1] rounded overflow-hidden border border-evr-border mb-2">
+                  <img src={page.backgroundImage} alt="Fondo personalizado" className="w-full h-full object-cover" />
+                </div>
+                <button
+                  className="btn-outline w-full text-xs mb-2"
+                  onClick={() => setBackgroundImage(null)}
+                >
+                  Quitar imagen
+                </button>
+              </>
+            )}
+          </>
+        )}
+
+        {/* -------- Controles de la imagen de fondo (si hay) -------- */}
+        {page.backgroundImage && (
+          <div className="space-y-2 mt-3 pt-3 border-t border-evr-border">
+            <div>
+              <div className="text-[10px] text-evr-muted uppercase tracking-wide mb-1">
+                Ajuste de la imagen
+              </div>
+              <div className="grid grid-cols-3 gap-1">
+                {(['cover', 'contain', 'repeat'] as const).map(fit => (
+                  <button
+                    key={fit}
+                    className={`btn-outline text-xs py-1 ${
+                      (page.backgroundImageFit || 'cover') === fit
+                        ? 'bg-evr-hover border-evr-accent'
+                        : ''
+                    }`}
+                    onClick={() => setBackgroundImageFit(fit)}
+                  >
+                    {fit === 'cover' ? 'Cover' : fit === 'contain' ? 'Contain' : 'Repeat'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <div className="flex justify-between text-[10px] text-evr-muted mb-0.5">
+                <span>Opacidad</span>
+                <span>{Math.round((page.backgroundImageOpacity ?? 1) * 100)}%</span>
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={1}
+                step={0.01}
+                value={page.backgroundImageOpacity ?? 1}
+                onChange={e => setBackgroundImageOpacity(parseFloat(e.target.value))}
+                className="w-full accent-evr-accent"
+              />
+            </div>
+
+            <div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  className="accent-evr-accent"
+                  checked={!!page.backgroundOverlay}
+                  onChange={e => {
+                    if (e.target.checked) {
+                      setBackgroundOverlay('rgba(0,0,0,0.35)');
+                    } else {
+                      setBackgroundOverlay(null);
+                    }
+                  }}
+                />
+                <span className="text-xs">Overlay oscuro</span>
+              </div>
+              {page.backgroundOverlay && (
+                <div className="flex items-center gap-2 mt-1.5">
+                  <input
+                    type="color"
+                    value="#000000"
+                    onChange={e => {
+                      const hex = e.target.value.replace('#', '');
+                      const r = parseInt(hex.slice(0, 2), 16);
+                      const g = parseInt(hex.slice(2, 4), 16);
+                      const b = parseInt(hex.slice(4, 6), 16);
+                      setBackgroundOverlay(`rgba(${r},${g},${b},0.35)`);
+                    }}
+                    className="w-8 h-6 cursor-pointer rounded border border-evr-border bg-transparent"
+                  />
+                  <input
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    value={parseFloat(page.backgroundOverlay.match(/[\d.]+(?=\))/)?.[0] || '0.35')}
+                    onChange={e => {
+                      const alpha = parseFloat(e.target.value);
+                      const base = page.backgroundOverlay!.replace(/[\d.]+(?=\))/, alpha.toString());
+                      setBackgroundOverlay(base);
+                    }}
+                    className="flex-1 accent-evr-accent"
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* -------- Muestra el color/imagen actual -------- */}
+        <div className="mt-3 pt-3 border-t border-evr-border flex items-center gap-2 text-[10px] text-evr-muted">
           <div
-            className="w-4 h-4 rounded border border-evr-border"
+            className="w-4 h-4 rounded border border-evr-border overflow-hidden"
             style={{ background: page.background || '#ffffff' }}
-          />
-          <span>Actual: {page.background || '#ffffff'}</span>
+          >
+            {page.backgroundImage && (
+              <img src={page.backgroundImage} alt="" className="w-full h-full object-cover" />
+            )}
+          </div>
+          <span className="truncate">
+            {page.backgroundImage
+              ? `Imagen + ${page.background}`
+              : `Color: ${page.background || '#ffffff'}`}
+          </span>
         </div>
       </div>
     </div>
