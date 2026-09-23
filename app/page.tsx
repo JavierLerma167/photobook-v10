@@ -22,6 +22,8 @@ export default function Page() {
   const showGrid = useStore(s => s.ui.showGrid);
   const nextSpread = useStore(s => s.nextSpread);
   const prevSpread = useStore(s => s.prevSpread);
+  const leftPanelOpen = useStore(s => s.ui.leftPanelOpen);
+  const rightPanelOpen = useStore(s => s.ui.rightPanelOpen);
 
   // -------------------------------------------------------------
   // Autosave cada 30s + al cerrar la pestaña
@@ -218,12 +220,12 @@ export default function Page() {
     <div className="h-screen flex flex-col bg-evr-bg text-evr-text">
       <TopBar />
       <div className="flex-1 flex min-h-0">
-        <PhotoLibrary />
+        {leftPanelOpen && <PhotoLibrary />}
         <div className="flex-1 flex flex-col min-h-0">
           <Canvas />
           <PageStrip />
         </div>
-        <RightPanel />
+        {rightPanelOpen && <RightPanel />}
       </div>
 
       <TemplateGallery />
