@@ -44,7 +44,7 @@ export async function exportProjectToPdf(
       project,
       project.pages[0],
       size,
-      150, // DPI base para el raster (subimos resolución después)
+      150,
       'cover'
     );
     const dataUrl = coverCanvas.toDataURL('image/jpeg', 0.92);
@@ -73,7 +73,6 @@ export async function exportProjectToPdf(
       firstPdfPageHandled = true;
     }
 
-    // Render del spread completo como un solo canvas
     const spreadCanvas = await renderSpreadToCanvas(
       project,
       leftPage,
@@ -86,7 +85,6 @@ export async function exportProjectToPdf(
 
     pdf.addImage(dataUrl, 'JPEG', 0, 0, spreadW, spreadH, undefined, 'FAST');
 
-    // Guías opcionales del spread (se dibujan encima en el PDF)
     if (includeGuides) {
       pdf.setDrawColor(255, 0, 0);
       pdf.setLineWidth(0.005);
@@ -107,6 +105,96 @@ export async function exportProjectToPdf(
 /* ============================================================
  * RENDERING A CANVAS
  * ============================================================ */
+
+/**
+ * Dibuja el fondo de una página en el contexto de canvas:
+ * - Color base (siempre)
+ * - Imagen/textura (si existe)
+ * - Overlay (si existe)
+ *
+ * @param x  origen X en píxeles
+ * @param y  origen Y en píxeles
+ * @param w  ancho del área de la página en píxeles
+ * @param h  alto del área de la página en píxeles
+ */
+async function drawPageBackground(
+  ctx: CanvasRenderingContext2D,
+  page: Page,
+  x: number,
+  y: number,
+  w: number,
+  h: number
+) {
+  // ---------- 1. COLOR BASE ----------
+  ctx.fillStyle = page.background || '#ffffff';
+  ctx.fillRect(x, y, w, h);
+
+  // ---------- 2. IMAGEN / TEXTURA ----------
+  if (page.backgroundImage) {
+    try {
+      const img = await loadImage(page.backgroundImage);
+      const opacity = page.backgroundImageOpacity ?? 1;
+      const fit = page.backgroundImageFit || 'cover';
+
+      ctx.save();
+      ctx.globalAlpha = opacity;
+
+      if (fit === 'repeat') {
+        // Patrón repetido: usamos un patrón de canvas
+        const pattern = ctx.createPattern(img, 'repeat');
+        if (pattern) {
+          ctx.fillStyle = pattern;
+          ctx.fillRect(x, y, w, h);
+        }
+      } else {
+        // cover / contain
+        const imgAspect = img.naturalWidth / img.naturalHeight;
+        const boxAspect = w / h;
+        let dw = w;
+        let dh = h;
+        let dx = x;
+        let dy = y;
+
+        if (fit === 'cover') {
+          if (imgAspect > boxAspect) {
+            // La imagen es más ancha: ajustamos por alto y recortamos lados
+            dh = h;
+            dw = h * imgAspect;
+            dx = x - (dw - w) / 2;
+          } else {
+            // La imagen es más alta: ajustamos por ancho y recortamos arriba/abajo
+            dw = w;
+            dh = w / imgAspect;
+            dy = y - (dh - h) / 2;
+          }
+        } else {
+          // contain: la imagen entera con márgenes
+          if (imgAspect > boxAspect) {
+            dw = w;
+            dh = w / imgAspect;
+            dy = y + (h - dh) / 2;
+          } else {
+            dh = h;
+            dw = h * imgAspect;
+            dx = x + (w - dw) / 2;
+          }
+        }
+
+        ctx.drawImage(img, dx, dy, dw, dh);
+      }
+
+      ctx.restore();
+    } catch (e) {
+      console.warn('No se pudo cargar background image', e);
+    }
+  }
+
+  // ---------- 3. OVERLAY ----------
+  if (page.backgroundOverlay) {
+    ctx.fillStyle = page.backgroundOverlay;
+    ctx.fillRect(x, y, w, h);
+  }
+}
 
 /**
  * Renderiza una sola página (portada o página suelta) como canvas.
@@ -130,9 +218,8 @@ async function renderPageToCanvas(
   canvas.height = hPx;
   const ctx = canvas.getContext('2d')!;
 
-  // Fondo completo (incluye zona de bleed)
-  ctx.fillStyle = page.background || '#ffffff';
-  ctx.fillRect(0, 0, wPx, hPx);
+  // Fondo completo (color + imagen + overlay) en toda la zona (incluye bleed)
+  await drawPageBackground(ctx, page, 0, 0, wPx, hPx);
 
   // Área de la página con clip
   ctx.save();
@@ -186,7 +273,7 @@ async function renderPageToCanvas(
     const tx = bleed + (t.x / 100) * pageW;
     const ty = bleed + (t.y / 100) * pageH;
     ctx.fillStyle = t.color;
-    ctx.font = `${t.fontWeight} ${(t.fontSize * dpi) / 72}px ${t.fontFamily}`;
+    ctx.font = `${t.fontWeight} ${(t.fontSize * dpi) / 72}px "${t.fontFamily}", sans-serif`;
     ctx.textAlign = t.align;
     ctx.textBaseline = 'top';
     const lines = t.text.split('\n');
@@ -195,7 +282,7 @@ async function renderPageToCanvas(
     });
   }
 
-  ctx.restore(); // quitar clip de página
+  ctx.restore();
 
   return canvas;
 }
@@ -229,16 +316,13 @@ async function renderSpreadToCanvas(
     // =====================================================
     // CASO SPANNED: una sola "página" de doble ancho
     // =====================================================
-    ctx.fillStyle = leftPage.background || '#ffffff';
-    ctx.fillRect(0, 0, wPx, hPx);
+    await drawPageBackground(ctx, leftPage, 0, 0, wPx, hPx);
 
-    // Clip al área de la página extendida (sin bleed)
     ctx.save();
     ctx.beginPath();
     ctx.rect(bleed, bleed, pageW * 2, pageH);
     ctx.clip();
 
-    // Slots sobre el doble ancho
     for (const slot of leftPage.slots) {
       if (!slot.photoId) continue;
       const photo = project.photos.find(p => p.id === slot.photoId);
@@ -274,12 +358,11 @@ async function renderSpreadToCanvas(
       ctx.restore();
     }
 
-    // Textos sobre el doble ancho
     for (const t of leftPage.texts) {
       const tx = bleed + (t.x / 100) * (pageW * 2);
       const ty = bleed + (t.y / 100) * pageH;
       ctx.fillStyle = t.color;
-      ctx.font = `${t.fontWeight} ${(t.fontSize * dpi) / 72}px ${t.fontFamily}`;
+      ctx.font = `${t.fontWeight} ${(t.fontSize * dpi) / 72}px "${t.fontFamily}", sans-serif`;
       ctx.textAlign = t.align;
       ctx.textBaseline = 'top';
       const lines = t.text.split('\n');
@@ -298,11 +381,9 @@ async function renderSpreadToCanvas(
 
   // ----- Mitad IZQUIERDA -----
   if (leftPage) {
-    // Fondo de la mitad izquierda
-    ctx.fillStyle = leftPage.background || '#ffffff';
-    ctx.fillRect(0, 0, bleed + pageW, hPx);
+    // Fondo (color + imagen + overlay) de la mitad izquierda
+    await drawPageBackground(ctx, leftPage, 0, 0, bleed + pageW, hPx);
 
-    // Clip al área de la página izquierda (incluyendo su bleed)
     ctx.save();
     ctx.beginPath();
     ctx.rect(bleed, bleed, pageW, pageH);
@@ -347,7 +428,7 @@ async function renderSpreadToCanvas(
       const tx = bleed + (t.x / 100) * pageW;
       const ty = bleed + (t.y / 100) * pageH;
       ctx.fillStyle = t.color;
-      ctx.font = `${t.fontWeight} ${(t.fontSize * dpi) / 72}px ${t.fontFamily}`;
+      ctx.font = `${t.fontWeight} ${(t.fontSize * dpi) / 72}px "${t.fontFamily}", sans-serif`;
       ctx.textAlign = t.align;
       ctx.textBaseline = 'top';
       const lines = t.text.split('\n');
@@ -361,8 +442,7 @@ async function renderSpreadToCanvas(
   // ----- Mitad DERECHA -----
   if (rightPage) {
     // Fondo de la mitad derecha
-    ctx.fillStyle = rightPage.background || '#ffffff';
-    ctx.fillRect(bleed + pageW, 0, bleed + pageW, hPx);
+    await drawPageBackground(ctx, rightPage, bleed + pageW, 0, bleed + pageW, hPx);
 
     ctx.save();
     ctx.beginPath();
@@ -408,7 +488,7 @@ async function renderSpreadToCanvas(
       const tx = bleed + pageW + (t.x / 100) * pageW;
       const ty = bleed + (t.y / 100) * pageH;
       ctx.fillStyle = t.color;
-      ctx.font = `${t.fontWeight} ${(t.fontSize * dpi) / 72}px ${t.fontFamily}`;
+      ctx.font = `${t.fontWeight} ${(t.fontSize * dpi) / 72}px "${t.fontFamily}", sans-serif`;
       ctx.textAlign = t.align;
       ctx.textBaseline = 'top';
       const lines = t.text.split('\n');
