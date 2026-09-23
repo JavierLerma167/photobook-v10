@@ -1,14 +1,41 @@
-export type AlbumSizeId = '8x8' | '10x10' | '12x12' | '11x14';
+// types.ts
+
+// ============================================================
+// TAMAÑOS DE ÁLBUM
+// ============================================================
+
+/** Identificadores de tamaño. 'custom' habilita tamaños personalizados. */
+export type AlbumSizeId = '8x8' | '10x10' | '12x12' | '11x14' | 'custom';
+
+/** Unidades de medida soportadas para tamaños personalizados. */
+export type Unit = 'in' | 'cm' | 'mm' | 'px';
+
+/** Orientación del lienzo. */
+export type Orientation = 'portrait' | 'landscape';
 
 export interface AlbumSize {
   id: AlbumSizeId;
   label: string;
+  /** Ancho en pulgadas (siempre normalizado internamente). */
   widthIn: number;
+  /** Alto en pulgadas (siempre normalizado internamente). */
   heightIn: number;
   bleedIn: number;
   safeIn: number;
   gutterIn: number;
+
+  // ---- Nuevos campos opcionales (solo para tamaños personalizados) ----
+  /** Unidad original elegida por el usuario. */
+  unit?: Unit;
+  /** Orientación del lienzo. */
+  orientation?: Orientation;
+  /** Resolución objetivo en DPI. */
+  dpi?: number;
 }
+
+// ============================================================
+// FOTOS
+// ============================================================
 
 export interface Photo {
   id: string;
@@ -21,6 +48,10 @@ export interface Photo {
   favorite: boolean;
   createdAt: number;
 }
+
+// ============================================================
+// SLOTS
+// ============================================================
 
 export type SlotFit = 'cover' | 'contain' | 'fill';
 
@@ -39,6 +70,10 @@ export interface Slot {
   locked: boolean;
   z: number;
 }
+
+// ============================================================
+// TEXTO
+// ============================================================
 
 export interface TextElement {
   id: string;
@@ -59,6 +94,10 @@ export interface TextElement {
   z: number;
 }
 
+// ============================================================
+// PÁGINAS
+// ============================================================
+
 export type PageKind = 'cover' | 'spread';
 
 export type BackgroundImageFit = 'cover' | 'contain' | 'repeat';
@@ -69,19 +108,23 @@ export interface Page {
   templateId: string | null;
   slots: Slot[];
   texts: TextElement[];
-  /** Color base del fondo (hex) */
+  /** Color base del fondo (hex). */
   background: string;
-  /** Imagen o textura de fondo (dataURL o URL) */
+  /** Imagen o textura de fondo (dataURL o URL). */
   backgroundImage?: string | null;
-  /** Opacidad de la imagen de fondo (0-1) */
+  /** Opacidad de la imagen de fondo (0-1). */
   backgroundImageOpacity?: number;
-  /** Cómo se ajusta la imagen al fondo */
+  /** Cómo se ajusta la imagen al fondo. */
   backgroundImageFit?: BackgroundImageFit;
-  /** Color de superposición sobre la imagen (ej: 'rgba(0,0,0,0.35)') */
+  /** Color de superposición sobre la imagen (ej: 'rgba(0,0,0,0.35)'). */
   backgroundOverlay?: string | null;
   label?: string;
   spanNext?: boolean;
 }
+
+// ============================================================
+// PLANTILLAS
+// ============================================================
 
 export interface Template {
   id: string;
@@ -93,10 +136,20 @@ export interface Template {
   slots: Array<Pick<Slot, 'x' | 'y' | 'w' | 'h'>>;
 }
 
+// ============================================================
+// PROYECTO
+// ============================================================
+
 export interface Project {
   id: string;
   name: string;
   sizeId: AlbumSizeId;
+  /**
+   * Tamaño completo cuando `sizeId === 'custom'`.
+   * Permite guardar dimensiones, unidad, DPI y orientación
+   * sin depender de un preset de `ALBUM_SIZES`.
+   */
+  customSize?: AlbumSize;
   pages: Page[];
   photos: Photo[];
   currentPageIndex: number;
@@ -105,6 +158,10 @@ export interface Project {
   updatedAt: number;
   printProfileId: string;
 }
+
+// ============================================================
+// PERFILES DE IMPRESIÓN
+// ============================================================
 
 export interface PrintProfile {
   id: string;
@@ -118,6 +175,10 @@ export interface PrintProfile {
   format: 'JPEG' | 'PDF';
   naming: string;
 }
+
+// ============================================================
+// PREFLIGHT
+// ============================================================
 
 export type PreflightLevel = 'error' | 'warning' | 'ok';
 
