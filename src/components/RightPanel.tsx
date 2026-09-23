@@ -9,7 +9,7 @@ import {
   AlignStartHorizontal, AlignCenterHorizontal, AlignEndHorizontal,
   ArrowLeftToLine, ArrowRightToLine, ArrowUpToLine, ArrowDownToLine,
   MoveHorizontal, MoveVertical, Combine, SplitSquareHorizontal, SplitSquareVertical,
-  Square, LayoutGrid
+  Square, LayoutGrid, Box
 } from 'lucide-react';
 import { Photo, Slot, Page } from '@/src/types';
 
@@ -41,7 +41,7 @@ export function RightPanel() {
   };
 
   return (
-    <div className="w-72 bg-evr-panel border-l border-evr-border flex flex-col shrink-0 overflow-y-auto scroll-thin">
+    <div className="w-64 lg:w-72 bg-evr-panel border-l border-evr-border flex flex-col shrink-0 overflow-y-auto scroll-thin">
       <div className="p-3 border-b border-evr-border">
         <div className="text-xs font-semibold text-evr-muted uppercase tracking-wide mb-3">
           Propiedades
@@ -189,7 +189,7 @@ export function RightPanel() {
       <div className="p-3 border-b border-evr-border">
         <div className="text-xs font-semibold text-evr-muted uppercase tracking-wide mb-2">Vista</div>
 
-        {/* Toggle de bordes */}
+        {/* Toggle de bordes (ahora con icono Box en vez de Square) */}
         <label className="flex items-center gap-2 cursor-pointer select-none">
           <input
             type="checkbox"
@@ -197,7 +197,7 @@ export function RightPanel() {
             checked={showSlotBorders}
             onChange={e => setUI({ showSlotBorders: e.target.checked })}
           />
-          <Square size={12} className="text-evr-muted" />
+          <Box size={12} className="text-evr-muted" />
           <span className="text-xs">Mostrar bordes de los slots</span>
         </label>
 
