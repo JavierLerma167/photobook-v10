@@ -144,12 +144,20 @@ export interface Project {
   id: string;
   name: string;
   sizeId: AlbumSizeId;
+
   /**
    * Tamaño completo cuando `sizeId === 'custom'`.
-   * Permite guardar dimensiones, unidad, DPI y orientación
+   *
+   * Permite guardar dimensiones, unidad, orientación y DPI
    * sin depender de un preset de `ALBUM_SIZES`.
+   *
+   * - Si `sizeId !== 'custom'`, este campo debe ser `undefined`
+   *   y se usará el preset correspondiente en `ALBUM_SIZES`.
+   * - Si `sizeId === 'custom'`, este campo es obligatorio y
+   *   `useAlbumSize()` lo devolverá directamente.
    */
   customSize?: AlbumSize;
+
   pages: Page[];
   photos: Photo[];
   currentPageIndex: number;
