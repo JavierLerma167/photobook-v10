@@ -24,12 +24,6 @@ export function Spread({ size, zoom }: Props) {
   // -------------------------------------------------------------
   // Normalizar el índice para mostrar SIEMPRE el spread completo,
   // incluso si currentPageIndex apunta a la página derecha.
-  //
-  // Reglas:
-  // - Índice 0 → portada
-  // - Índice 1, 3, 5... → primera página del spread (izquierda)
-  // - Índice 2, 4, 6... → segunda página del spread (derecha)
-  //   → retrocedemos 1 para mostrar el spread desde la izquierda
   // -------------------------------------------------------------
   let currentIndex = rawIndex;
   if (rawIndex > 0) {
@@ -37,7 +31,6 @@ export function Spread({ size, zoom }: Props) {
     if (p && p.kind !== 'cover') {
       const offset = rawIndex - 1;
       if (offset % 2 === 1) {
-        // Es una página derecha → retrocedemos para alinear al inicio del spread
         currentIndex = rawIndex - 1;
       }
     }
@@ -47,10 +40,7 @@ export function Spread({ size, zoom }: Props) {
   const rightPage = project.pages[currentIndex + 1];
   const prevPage = currentIndex > 0 ? project.pages[currentIndex - 1] : undefined;
 
-  // -------------------------------------------------------------
   // Caso 1: página "consumida" por la anterior (spanNext del anterior)
-  // Mostramos la página anterior como página extendida.
-  // -------------------------------------------------------------
   if (prevPage?.spanNext && leftPage) {
     return (
       <SpannedPage
@@ -64,9 +54,7 @@ export function Spread({ size, zoom }: Props) {
     );
   }
 
-  // -------------------------------------------------------------
   // Caso 2: portada → página sola
-  // -------------------------------------------------------------
   if (leftPage?.kind === 'cover') {
     return (
       <SinglePage
@@ -80,9 +68,7 @@ export function Spread({ size, zoom }: Props) {
     );
   }
 
-  // -------------------------------------------------------------
   // Caso 3: página izquierda extendida (spanNext) → doble ancho
-  // -------------------------------------------------------------
   if (leftPage?.spanNext) {
     return (
       <SpannedPage
@@ -96,9 +82,7 @@ export function Spread({ size, zoom }: Props) {
     );
   }
 
-  // -------------------------------------------------------------
   // Caso 4: no hay página derecha → izquierda sola
-  // -------------------------------------------------------------
   if (!rightPage) {
     return (
       <SinglePage
@@ -112,9 +96,7 @@ export function Spread({ size, zoom }: Props) {
     );
   }
 
-  // -------------------------------------------------------------
   // Caso 5: spread normal (izquierda + derecha)
-  // -------------------------------------------------------------
   return (
     <SpreadDouble
       leftPage={leftPage}
@@ -125,6 +107,46 @@ export function Spread({ size, zoom }: Props) {
       selectedSlotId={selectedSlotId}
       selectedTextId={selectedTextId}
     />
+  );
+}
+
+/* ============================================================
+ * Fondo de página (color + imagen/textura + overlay)
+ * ============================================================ */
+function PageBackground({ page }: { page: Page }) {
+  const bg = page.background || '#ffffff';
+  const img = page.backgroundImage;
+  const fit = page.backgroundImageFit || 'cover';
+  const opacity = page.backgroundImageOpacity ?? 1;
+  const overlay = page.backgroundOverlay;
+
+  return (
+    <>
+      {/* 1. Color base */}
+      <div className="absolute inset-0" style={{ background: bg }} />
+
+      {/* 2. Imagen/textura encima del color */}
+      {img && (
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            opacity,
+            backgroundImage: `url("${img}")`,
+            backgroundSize: fit === 'repeat' ? 'auto' : fit,
+            backgroundRepeat: fit === 'repeat' ? 'repeat' : 'no-repeat',
+            backgroundPosition: 'center center',
+          }}
+        />
+      )}
+
+      {/* 3. Overlay de color (para oscurecer o teñir) */}
+      {overlay && (
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{ background: overlay }}
+        />
+      )}
+    </>
   );
 }
 
@@ -151,10 +173,11 @@ function SinglePage({
 
   return (
     <div
-      className="relative bg-white shadow-2xl"
+      className="relative shadow-2xl"
       style={{ width: totalW, height: totalH, borderRadius: 2 }}
     >
-      <div className="absolute inset-0" style={{ background: page.background || '#ffffff' }} />
+      {/* Fondo (color + imagen + overlay) */}
+      <PageBackground page={page} />
 
       <div
         className="absolute"
@@ -213,21 +236,20 @@ function SpreadDouble({
 
   return (
     <div
-      className="relative bg-white shadow-2xl"
+      className="relative shadow-2xl"
       style={{ width: totalW, height: totalH, borderRadius: 2 }}
     >
       {/* Mitad IZQUIERDA → leftPage */}
       <div
-        className="absolute"
+        className="absolute overflow-hidden"
         style={{
           left: bleed,
           top: bleed,
           width: pageW,
           height: pageH,
-          overflow: 'hidden',
-          background: leftPage.background || '#ffffff'
         }}
       >
+        <PageBackground page={leftPage} />
         <PageInner
           page={leftPage}
           pageWidth={pageW}
@@ -242,16 +264,15 @@ function SpreadDouble({
 
       {/* Mitad DERECHA → rightPage */}
       <div
-        className="absolute"
+        className="absolute overflow-hidden"
         style={{
           left: bleed + pageW,
           top: bleed,
           width: pageW,
           height: pageH,
-          overflow: 'hidden',
-          background: rightPage.background || '#ffffff'
         }}
       >
+        <PageBackground page={rightPage} />
         <PageInner
           page={rightPage}
           pageWidth={pageW}
@@ -316,10 +337,11 @@ function SpannedPage({
 
   return (
     <div
-      className="relative bg-white shadow-2xl"
+      className="relative shadow-2xl"
       style={{ width: totalW, height: totalH, borderRadius: 2 }}
     >
-      <div className="absolute inset-0" style={{ background: page.background || '#ffffff' }} />
+      {/* Fondo (color + imagen + overlay) sobre el doble ancho */}
+      <PageBackground page={page} />
 
       <div
         className="absolute"
