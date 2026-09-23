@@ -61,13 +61,24 @@ export interface TextElement {
 
 export type PageKind = 'cover' | 'spread';
 
+export type BackgroundImageFit = 'cover' | 'contain' | 'repeat';
+
 export interface Page {
   id: string;
   kind: PageKind;
   templateId: string | null;
   slots: Slot[];
   texts: TextElement[];
+  /** Color base del fondo (hex) */
   background: string;
+  /** Imagen o textura de fondo (dataURL o URL) */
+  backgroundImage?: string | null;
+  /** Opacidad de la imagen de fondo (0-1) */
+  backgroundImageOpacity?: number;
+  /** Cómo se ajusta la imagen al fondo */
+  backgroundImageFit?: BackgroundImageFit;
+  /** Color de superposición sobre la imagen (ej: 'rgba(0,0,0,0.35)') */
+  backgroundOverlay?: string | null;
   label?: string;
   spanNext?: boolean;
 }
