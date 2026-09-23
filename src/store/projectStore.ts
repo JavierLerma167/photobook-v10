@@ -1,3 +1,4 @@
+// src/store/projectStore.ts
 import { create } from 'zustand';
 import { nanoid } from 'nanoid';
 import {
@@ -7,16 +8,23 @@ import { BUILTIN_TEMPLATES, COVER_TEMPLATES } from '@/src/engine/templates';
 import { applyTemplate, assignPhotoToSlot, shufflePhotos, suggestLayouts } from '@/src/engine/layoutEngine';
 import { HistoryState, pushHistory, undo as undoH, redo as redoH } from '@/src/engine/history';
 
-export const ALBUM_SIZES: Record<AlbumSizeId, AlbumSize> = {
-  '8x8':   { id: '8x8',   label: '8×8 in',   widthIn: 8,  heightIn: 8,  bleedIn: 0.125, safeIn: 0.25, gutterIn: 0.25 },
-  '10x10': { id: '10x10', label: '10×10 in', widthIn: 10, heightIn: 10, bleedIn: 0.125, safeIn: 0.3,  gutterIn: 0.3 },
-  '12x12': { id: '12x12', label: '12×12 in', widthIn: 12, heightIn: 12, bleedIn: 0.125, safeIn: 0.35, gutterIn: 0.35 },
-  '11x14': { id: '11x14', label: '11×14 in', widthIn: 14, heightIn: 11, bleedIn: 0.125, safeIn: 0.35, gutterIn: 0.35 }
+// ============================================================
+// TAMAÑOS PREDEFINIDOS
+// ============================================================
+export const ALBUM_SIZES: Record<Exclude<AlbumSizeId, 'custom'>, AlbumSize> = {
+  '8x8':   { id: '8x8',   label: '8×8 in',   widthIn: 8,  heightIn: 8,  bleedIn: 0.125, safeIn: 0.25, gutterIn: 0.25, unit: 'in', orientation: 'portrait',  dpi: 300 },
+  '10x10': { id: '10x10', label: '10×10 in', widthIn: 10, heightIn: 10, bleedIn: 0.125, safeIn: 0.3,  gutterIn: 0.3,  unit: 'in', orientation: 'portrait',  dpi: 300 },
+  '12x12': { id: '12x12', label: '12×12 in', widthIn: 12, heightIn: 12, bleedIn: 0.125, safeIn: 0.35, gutterIn: 0.35, unit: 'in', orientation: 'portrait',  dpi: 300 },
+  '11x14': { id: '11x14', label: '11×14 in', widthIn: 14, heightIn: 11, bleedIn: 0.125, safeIn: 0.35, gutterIn: 0.35, unit: 'in', orientation: 'landscape', dpi: 300 }
 };
 
 export const DEFAULT_PROFILES: PrintProfile[] = [
   { id: 'default', name: 'Estándar 300 DPI', sizeId: '10x10', dpi: 300, bleedIn: 0.125, safeIn: 0.3, gutterIn: 0.3, colorSpace: 'sRGB', format: 'JPEG', naming: 'page-{n}' }
 ];
+
+// ============================================================
+// HELPERS
+// ============================================================
 
 function createEmptyPage(kind: 'cover' | 'spread' = 'spread'): Page {
   const template = kind === 'cover'
@@ -38,11 +46,20 @@ function createEmptyPage(kind: 'cover' | 'spread' = 'spread'): Page {
   };
 }
 
-export function createProject(name: string, sizeId: AlbumSizeId): Project {
+/**
+ * Crea un proyecto nuevo.
+ *
+ * Acepta un `AlbumSize` completo en lugar de solo un `sizeId`, de modo que
+ * los tamaños personalizados (con unidad, orientación y DPI propios) se
+ * guarden en `customSize` y no dependan de `ALBUM_SIZES`.
+ */
+export function createProject(name: string, size: AlbumSize): Project {
+  const isCustom = size.id === 'custom';
   return {
     id: nanoid(10),
     name,
-    sizeId,
+    sizeId: size.id,
+    customSize: isCustom ? size : undefined,
     version: 1,
     createdAt: Date.now(),
     updatedAt: Date.now(),
@@ -82,6 +99,10 @@ function findPageIndexByText(pages: Page[], textId: string): number {
   return -1;
 }
 
+// ============================================================
+// TIPOS DEL STORE
+// ============================================================
+
 interface UIState {
   selectedSlotId: string | null;
   selectedSlotIds: string[];
@@ -107,7 +128,8 @@ interface StoreState {
   templates: Template[];
   profiles: PrintProfile[];
 
-  newProject: (name: string, sizeId: AlbumSizeId) => void;
+  // Cambia la firma: ahora recibe un AlbumSize completo
+  newProject: (name: string, size: AlbumSize) => void;
   setProject: (p: Project) => void;
   renameProject: (name: string) => void;
   importPhotos: (photos: Photo[]) => void;
@@ -152,8 +174,12 @@ interface StoreState {
   loadLocal: () => boolean;
 }
 
+// ============================================================
+// STORE
+// ============================================================
+
 export const useStore = create<StoreState>((set, get) => {
-  const initialProject = createProject('Sin título', '10x10');
+  const initialProject = createProject('Sin título', ALBUM_SIZES['10x10']);
 
   return {
     history: { past: [], present: initialProject, future: [] },
@@ -178,8 +204,11 @@ export const useStore = create<StoreState>((set, get) => {
     templates: [...BUILTIN_TEMPLATES, ...COVER_TEMPLATES],
     profiles: DEFAULT_PROFILES,
 
-    newProject: (name, sizeId) => set(s => ({
-      history: pushHistory(s.history, createProject(name, sizeId)),
+    // -------------------------------------------------------------
+    // NUEVO PROYECTO (acepta AlbumSize completo)
+    // -------------------------------------------------------------
+    newProject: (name, size) => set(s => ({
+      history: pushHistory(s.history, createProject(name, size)),
       ui: {
         ...s.ui,
         selectedSlotId: null,
@@ -731,6 +760,10 @@ export const useStore = create<StoreState>((set, get) => {
   };
 });
 
+// ============================================================
+// HELPERS INTERNOS
+// ============================================================
+
 function commit(s: StoreState, next: Project): Partial<StoreState> {
   return { history: pushHistory(s.history, { ...next, updatedAt: Date.now() }) };
 }
@@ -742,9 +775,28 @@ function replacePage(project: Project, page: Page): Project {
   };
 }
 
+// ============================================================
+// HOOKS
+// ============================================================
+
 export const useCurrentProject = () => useStore(s => s.history.present);
-export const useCurrentPage = () => useStore(s => s.history.present.pages[s.history.present.currentPageIndex]);
+
+export const useCurrentPage = () =>
+  useStore(s => s.history.present.pages[s.history.present.currentPageIndex]);
+
+/**
+ * Devuelve el `AlbumSize` activo.
+ *
+ * - Si el proyecto tiene `customSize` (tamaño personalizado), lo devuelve.
+ * - Si no, busca el preset en `ALBUM_SIZES` por `sizeId`.
+ *
+ * Esto garantiza que el resto del código (Spread, preflight, export…)
+ * funcione igual tanto con presets como con tamaños personalizados.
+ */
 export const useAlbumSize = (): AlbumSize => {
-  const sizeId = useStore(s => s.history.present.sizeId);
-  return ALBUM_SIZES[sizeId];
+  const project = useStore(s => s.history.present);
+  if (project.customSize) return project.customSize;
+  const preset = ALBUM_SIZES[project.sizeId as Exclude<AlbumSizeId, 'custom'>];
+  // Fallback defensivo por si el sizeId no existe
+  return preset ?? ALBUM_SIZES['10x10'];
 };
