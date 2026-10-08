@@ -26,6 +26,13 @@ export default function Page() {
   const leftPanelOpen = useStore(s => s.ui.leftPanelOpen);
   const rightPanelOpen = useStore(s => s.ui.rightPanelOpen);
 
+  // Acciones nuevas para atajos de slot
+  const copySlot = useStore(s => s.copySlot);
+  const pasteSlot = useStore(s => s.pasteSlot);
+  const duplicateSlot = useStore(s => s.duplicateSlot);
+  const clearSlot = useStore(s => s.clearSlot);
+  const slotClipboard = useStore(s => s.ui.slotClipboard);
+
   // -------------------------------------------------------------
   // Cargar todas las fuentes de Google Fonts al inicio
   // -------------------------------------------------------------
@@ -47,13 +54,16 @@ export default function Page() {
   }, [saveLocal]);
 
   // -------------------------------------------------------------
-  // Atajos globales (Ctrl/Cmd + ...)
+  // Atajos globales (Ctrl/Cmd + ...) + acciones de slot
   // -------------------------------------------------------------
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const mod = e.ctrlKey || e.metaKey;
+      const state = useStore.getState();
+      const selectedSlot = state.ui.selectedSlotId;
+      const selectedText = state.ui.selectedTextId;
 
-      // Undo / Redo
+      // --- Undo / Redo ---
       if (mod && e.key.toLowerCase() === 'z' && !e.shiftKey) {
         e.preventDefault();
         undo();
@@ -65,14 +75,14 @@ export default function Page() {
         return;
       }
 
-      // Guardar
+      // --- Guardar ---
       if (mod && e.key.toLowerCase() === 's') {
         e.preventDefault();
         saveLocal();
         return;
       }
 
-      // Zoom
+      // --- Zoom ---
       if (mod && e.key === '0') {
         e.preventDefault();
         setUI({ zoom: 0.5 });
@@ -89,7 +99,7 @@ export default function Page() {
         return;
       }
 
-      // Navegación entre spreads (Alt + flechas)
+      // --- Navegación entre spreads (Alt + flechas) ---
       if (e.altKey && e.key === 'ArrowRight') {
         e.preventDefault();
         nextSpread();
@@ -101,29 +111,89 @@ export default function Page() {
         return;
       }
 
+      // =========================================================
+      // Atajos de SLOT (solo si hay un slot seleccionado)
+      // =========================================================
+      if (selectedSlot) {
+        // Ctrl/Cmd + C → copiar slot
+        if (mod && !e.shiftKey && e.key.toLowerCase() === 'c') {
+          e.preventDefault();
+          copySlot(selectedSlot);
+          return;
+        }
+
+        // Ctrl/Cmd + V → pegar slot
+        if (mod && !e.shiftKey && e.key.toLowerCase() === 'v') {
+          e.preventDefault();
+          if (slotClipboard) pasteSlot();
+          return;
+        }
+
+        // Ctrl/Cmd + D → duplicar slot
+        if (mod && !e.shiftKey && e.key.toLowerCase() === 'd') {
+          e.preventDefault();
+          duplicateSlot(selectedSlot);
+          return;
+        }
+
+        // Supr / Backspace → borrar la foto del slot
+        if (e.key === 'Delete' || e.key === 'Backspace') {
+          // Evitamos que Backspace dispare el navegar atrás
+          e.preventDefault();
+          clearSlot(selectedSlot);
+          return;
+        }
+      }
+
+      // =========================================================
       // Atajos sin modificadores
+      // =========================================================
       if (!mod) {
         if (e.key === 'r' || e.key === 'R') {
           setUI({ showGrid: !showGrid });
           return;
         }
         if ((e.key === 's' || e.key === 'S') && !e.altKey && !e.shiftKey) {
+          // Sólo shuffle si no estamos escribiendo en un input
+          const target = e.target as HTMLElement;
+          if (
+            target.tagName === 'INPUT' ||
+            target.tagName === 'TEXTAREA' ||
+            target.isContentEditable
+          ) {
+            return;
+          }
           shuffle();
           return;
         }
         if (e.key === 'g' || e.key === 'G') {
-          setUI({ showGuides: !useStore.getState().ui.showGuides });
+          setUI({ showGuides: !state.ui.showGuides });
           return;
         }
         if (e.key === 'Escape') {
-          useStore.getState().select(null, null);
+          state.select(null, null);
           return;
         }
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [undo, redo, saveLocal, setUI, shuffle, zoom, showGrid, nextSpread, prevSpread]);
+  }, [
+    undo,
+    redo,
+    saveLocal,
+    setUI,
+    shuffle,
+    zoom,
+    showGrid,
+    nextSpread,
+    prevSpread,
+    copySlot,
+    pasteSlot,
+    duplicateSlot,
+    clearSlot,
+    slotClipboard,
+  ]);
 
   // -------------------------------------------------------------
   // Atajos para el slot seleccionado: flechas para mover
@@ -135,10 +205,9 @@ export default function Page() {
       if (!sel) return;
 
       const mod = e.ctrlKey || e.metaKey;
-      // Ctrl+... ya lo maneja el handler anterior (undo, save, etc.)
+      // Ctrl+... ya lo maneja el handler anterior (undo, save, copy, etc.)
       if (mod) return;
 
-      // Solo las flechas actúan sobre el slot
       const isArrow =
         e.key === 'ArrowLeft' ||
         e.key === 'ArrowRight' ||
@@ -228,7 +297,7 @@ export default function Page() {
     <div className="h-screen flex flex-col bg-evr-bg text-evr-text">
       <TopBar />
 
-      {/* ✅ min-w-0 en el contenedor central: permite que el PageStrip
+      {/* min-w-0 en el contenedor central: permite que el PageStrip
           active su scroll horizontal en lugar de empujar al RightPanel. */}
       <div className="flex-1 flex min-h-0 min-w-0">
         {leftPanelOpen && <PhotoLibrary />}

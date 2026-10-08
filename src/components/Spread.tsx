@@ -1,10 +1,12 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useStore } from '@/src/store/projectStore';
-import { AlbumSize, Page } from '@/src/types';
+import { AlbumSize, Page, Slot } from '@/src/types';
 import { SlotView } from './PhotoSlot';
 import { TextElementView } from './TextElementView';
+import { makeFullBleedTemplate } from '@/src/engine/autoTemplate';
+import { pushHistory } from '@/src/engine/history';
 
 interface Props {
   size: AlbumSize;
@@ -353,52 +355,17 @@ function SpannedPage({
           overflow: 'hidden'
         }}
       >
-        {showGrid && (
-          <div
-            className="absolute inset-0 pointer-events-none opacity-20"
-            style={{
-              backgroundImage:
-                'linear-gradient(to right, #888 1px, transparent 1px), linear-gradient(to bottom, #888 1px, transparent 1px)',
-              backgroundSize: '40px 40px'
-            }}
-          />
-        )}
-
-        {showGuides && (
-          <div
-            className="absolute pointer-events-none border border-sky-500/40"
-            style={{
-              left: safe,
-              top: safe,
-              width: pageW * 2 - safe * 2,
-              height: pageH - safe * 2
-            }}
-          />
-        )}
-
-        {page.slots.map(slot => (
-          <SlotView
-            key={slot.id}
-            slot={slot}
-            page={page}
-            pageWidth={pageW * 2}
-            pageHeight={pageH}
-            offsetX={0}
-            viewWidth={pageW * 2}
-            selected={selectedSlotId === slot.id}
-          />
-        ))}
-
-        {page.texts.map(t => (
-          <TextElementView
-            key={t.id}
-            text={t}
-            pageWidth={pageW * 2}
-            pageHeight={pageH}
-            offsetX={0}
-            selected={selectedTextId === t.id}
-          />
-        ))}
+        {/* Reutilizamos PageInner con el ancho doblado */}
+        <PageInner
+          page={page}
+          pageWidth={pageW * 2}
+          pageHeight={pageH}
+          safe={safe}
+          showGuides={showGuides}
+          showGrid={showGrid}
+          selectedSlotId={selectedSlotId}
+          selectedTextId={selectedTextId}
+        />
       </div>
 
       {/* Gutter (referencia visual en el centro) */}
@@ -426,7 +393,17 @@ function SpannedPage({
 }
 
 /* ============================================================
- * Contenido interno de una página (slots + textos + guías internas)
+ * Contenido interno de una página (slots + textos + drop handler)
+ *
+ * Acepta drops de:
+ *  - application/x-evr-photos  → JSON con array de IDs (grupo)
+ *  - application/x-evr-photo   → ID individual
+ *
+ * Comportamiento:
+ *  - Página VACÍA (ningún slot con foto):
+ *      → genera una plantilla AUTO Full Bleed con N slots
+ *  - Página con fotos:
+ *      → CREA slots NUEVOS (uno por foto) sin tocar los existentes
  * ============================================================ */
 function PageInner({
   page, pageWidth, pageHeight, safe, showGuides, showGrid, selectedSlotId, selectedTextId
@@ -440,8 +417,75 @@ function PageInner({
   selectedSlotId: string | null;
   selectedTextId: string | null;
 }) {
+  const [isDragOverEmpty, setIsDragOverEmpty] = useState(false);
+
+  const empty = isPageEmpty(page);
+
+  // -------------------------------------------------------------
+  // Drag over
+  // -------------------------------------------------------------
+  const handleDragOver = (e: React.DragEvent) => {
+    if (
+      e.dataTransfer.types.includes('application/x-evr-photos') ||
+      e.dataTransfer.types.includes('application/x-evr-photo')
+    ) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'copy';
+      if (empty) setIsDragOverEmpty(true);
+    }
+  };
+
+  const handleDragLeave = () => setIsDragOverEmpty(false);
+
+  // -------------------------------------------------------------
+  // Drop handler
+  // -------------------------------------------------------------
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOverEmpty(false);
+
+    // 1) Grupo
+    const groupRaw = e.dataTransfer.getData('application/x-evr-photos');
+    if (groupRaw) {
+      try {
+        const ids: string[] = JSON.parse(groupRaw);
+        if (ids.length > 0) {
+          handleGroupDrop(page, ids);
+          return;
+        }
+      } catch {
+        // ignorar
+      }
+    }
+
+    // 2) Individual
+    const single = e.dataTransfer.getData('application/x-evr-photo');
+    if (single) {
+      if (empty) {
+        applyAutoTemplateAndAssign(page, [single]);
+      } else {
+        createSlotsForPhotos(page, [single]);
+      }
+    }
+  };
+
   return (
-    <>
+    <div
+      className="absolute inset-0"
+      onDrop={handleDrop}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+    >
+      {/* Overlay cuando se arrastra sobre una página vacía */}
+      {isDragOverEmpty && (
+        <div className="absolute inset-0 pointer-events-none border-2 border-dashed border-evr-accent bg-evr-accent/10 flex items-center justify-center z-50">
+          <div className="bg-evr-panel/90 text-evr-text text-[11px] px-3 py-1.5 rounded shadow-lg">
+            Suelta para crear Full Bleed
+          </div>
+        </div>
+      )}
+
       {showGrid && (
         <div
           className="absolute inset-0 pointer-events-none opacity-20"
@@ -488,6 +532,162 @@ function PageInner({
           selected={selectedTextId === t.id}
         />
       ))}
-    </>
+    </div>
   );
+}
+
+/* ============================================================
+ * Helpers
+ * ============================================================ */
+
+/**
+ * ¿La página no tiene ninguna foto asignada?
+ */
+function isPageEmpty(page: Page): boolean {
+  return page.slots.every(s => !s.photoId);
+}
+
+/**
+ * Decide cómo colocar el grupo según el estado de la página:
+ *  - Página vacía → genera plantilla auto Full Bleed
+ *  - Página con fotos → crea slots nuevos (uno por foto)
+ */
+function handleGroupDrop(page: Page, photoIds: string[]) {
+  if (isPageEmpty(page)) {
+    applyAutoTemplateAndAssign(page, photoIds);
+  } else {
+    createSlotsForPhotos(page, photoIds);
+  }
+}
+
+/**
+ * Crea un slot NUEVO por cada foto del array, sin tocar los slots existentes.
+ * Los slots se colocan cerca del centro con un pequeño desplazamiento en
+ * cascada para que no queden perfectamente apilados.
+ */
+function createSlotsForPhotos(page: Page, photoIds: string[]) {
+  const state = useStore.getState();
+  const pages = state.history.present.pages;
+  const pageIndex = pages.findIndex(p => p.id === page.id);
+  if (pageIndex < 0) return;
+
+  // Tamaño base para los slots nuevos (proporcional al número de fotos)
+  const n = photoIds.length;
+  const baseW = n === 1 ? 40 : n <= 3 ? 35 : n <= 6 ? 30 : 25;
+  const baseH = n === 1 ? 30 : n <= 3 ? 30 : n <= 6 ? 25 : 22;
+
+  // Punto de partida: centro, con un poco de margen
+  const startX = 50 - baseW / 2;
+  const startY = 50 - baseH / 2;
+
+  // Desplazamiento en cascada para que no se solapen
+  const step = 3;
+
+  const newSlots: Slot[] = photoIds.map((photoId, i) => {
+    // Distribuimos en una pequeña cuadrícula alrededor del centro
+    const col = i % 3;
+    const row = Math.floor(i / 3);
+    const dx = col * step - step;
+    const dy = row * step - step;
+
+    const x = Math.max(0, Math.min(100 - baseW, startX + dx));
+    const y = Math.max(0, Math.min(100 - baseH, startY + dy));
+
+    return {
+      id: generateId(),
+      x,
+      y,
+      w: baseW,
+      h: baseH,
+      photoId,
+      fit: 'cover',
+      offsetX: 0,
+      offsetY: 0,
+      zoom: 1,
+      rotation: 0,
+      locked: false,
+      z: page.slots.length + i,
+    };
+  });
+
+  const updatedPage: Page = {
+    ...page,
+    slots: [...page.slots, ...newSlots],
+  };
+
+  const nextPages = pages.map((p, i) => (i === pageIndex ? updatedPage : p));
+
+  // Seleccionamos el último slot creado (el más reciente) para que el usuario
+  // pueda moverlo/ajustarlo inmediatamente
+  const lastSlot = newSlots[newSlots.length - 1];
+
+  useStore.setState(s => ({
+    history: pushHistory(s.history, {
+      ...s.history.present,
+      pages: nextPages,
+      updatedAt: Date.now(),
+    }),
+    ui: { ...s.ui, selectedSlotId: lastSlot.id, selectedSlotIds: [lastSlot.id] },
+  }));
+}
+
+/**
+ * Genera una plantilla Full Bleed con N slots, la aplica a la página
+ * (reemplazando sus slots actuales) y asigna las fotos en orden.
+ *
+ * Todo en una sola llamada a setProject para que el undo sea atómico.
+ */
+function applyAutoTemplateAndAssign(page: Page, photoIds: string[]) {
+  const state = useStore.getState();
+  const pages = state.history.present.pages;
+
+  const pageIndex = pages.findIndex(p => p.id === page.id);
+  if (pageIndex < 0) return;
+
+  // Generamos la plantilla con N slots
+  const template = makeFullBleedTemplate(photoIds.length);
+
+  // Construimos los slots nuevos a partir de la plantilla
+  const newSlots: Slot[] = template.slots.map((s, i) => ({
+    id: generateId(),
+    x: s.x,
+    y: s.y,
+    w: s.w,
+    h: s.h,
+    photoId: null,
+    fit: 'cover',
+    offsetX: 0,
+    offsetY: 0,
+    zoom: 1,
+    rotation: 0,
+    locked: false,
+    z: i,
+  }));
+
+  // Asignamos las fotos en orden
+  newSlots.forEach((slot, i) => {
+    if (i < photoIds.length) slot.photoId = photoIds[i];
+  });
+
+  // Sustituimos slots + templateId en la página
+  const updatedPage: Page = {
+    ...page,
+    slots: newSlots,
+    templateId: template.id,
+  };
+
+  const nextPages = pages.map((p, i) => (i === pageIndex ? updatedPage : p));
+
+  state.setProject({ ...state.history.present, pages: nextPages });
+}
+
+/**
+ * Genera un ID único para slots nuevos. Usa crypto.randomUUID si está
+ * disponible; si no, cae a un contador basado en tiempo + random.
+ */
+function generateId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `slot-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }

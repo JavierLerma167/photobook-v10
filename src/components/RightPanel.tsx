@@ -573,13 +573,14 @@ export function RightPanel() {
 }
 
 /* ============================================================
- * Unir / Dividir slots
+ * Unir / Dividir / Eliminar slots
  * ============================================================ */
 
 function MergeSplitTools({ slot }: { slot: Slot }) {
   const selectedIds = useStore(s => s.ui.selectedSlotIds);
   const mergeSlots = useStore(s => s.mergeSlots);
   const splitSlot = useStore(s => s.splitSlot);
+  const deleteSlot = useStore(s => s.deleteSlot); // ✅ NUEVA
   const canMerge = selectedIds.length >= 2;
 
   return (
@@ -628,6 +629,32 @@ function MergeSplitTools({ slot }: { slot: Slot }) {
           {selectedIds.length} slots seleccionados
         </div>
       )}
+
+      {/* ✅ NUEVO: Eliminar el slot completo */}
+      <div className="border-t border-evr-border pt-2 mt-3">
+        <button
+          className="btn-outline w-full text-xs flex items-center justify-center gap-1.5 text-red-400 hover:bg-red-600/10 border-red-600/30"
+          onClick={() => {
+            if (selectedIds.length > 1 && selectedIds.includes(slot.id)) {
+              // Si hay multi-selección que incluye este slot → borrar todos
+              selectedIds.forEach(id => deleteSlot(id));
+            } else {
+              deleteSlot(slot.id);
+            }
+          }}
+          title={
+            selectedIds.length > 1
+              ? `Eliminar ${selectedIds.length} slots seleccionados`
+              : 'Eliminar este slot por completo (no solo vaciarlo)'
+          }
+        >
+          <Trash2 size={12} />
+          Eliminar slot{selectedIds.length > 1 ? `s (${selectedIds.length})` : ''}
+        </button>
+        <div className="text-[10px] text-evr-muted mt-1 leading-relaxed">
+          Elimina el contenedor completo. Para solo vaciar la foto, usa doble clic sobre el slot.
+        </div>
+      </div>
     </div>
   );
 }

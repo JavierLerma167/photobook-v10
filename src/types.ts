@@ -108,16 +108,25 @@ export interface Page {
   templateId: string | null;
   slots: Slot[];
   texts: TextElement[];
+
   /** Color base del fondo (hex). */
   background: string;
+
   /** Imagen o textura de fondo (dataURL o URL). */
   backgroundImage?: string | null;
+
   /** Opacidad de la imagen de fondo (0-1). */
   backgroundImageOpacity?: number;
+
   /** Cómo se ajusta la imagen al fondo. */
   backgroundImageFit?: BackgroundImageFit;
+
+  /** ✅ NUEVO: Desenfoque de la imagen de fondo en píxeles (0-40). */
+  backgroundImageBlur?: number;
+
   /** Color de superposición sobre la imagen (ej: 'rgba(0,0,0,0.35)'). */
   backgroundOverlay?: string | null;
+
   label?: string;
   spanNext?: boolean;
 }

@@ -2,7 +2,7 @@
 import { create } from 'zustand';
 import { nanoid } from 'nanoid';
 import {
-  Project, Photo, Page, Slot, TextElement, AlbumSizeId, PrintProfile, Template, AlbumSize
+  Project, Photo, Page, Slot, TextElement, AlbumSizeId, PrintProfile, Template, AlbumSize, SlotFit
 } from '@/src/types';
 import { BUILTIN_TEMPLATES, COVER_TEMPLATES } from '@/src/engine/templates';
 import { applyTemplate, assignPhotoToSlot, shufflePhotos, suggestLayouts } from '@/src/engine/layoutEngine';
@@ -120,6 +120,18 @@ interface UIState {
   exportOpen: boolean;
   newProjectOpen: boolean;
   autosaveAt: number;
+
+  // ✅ Portapapeles de slots
+  slotClipboard: {
+    w: number;
+    h: number;
+    fit: SlotFit;
+    offsetX: number;
+    offsetY: number;
+    zoom: number;
+    rotation: number;
+    photoId: string | null;
+  } | null;
 }
 
 interface StoreState {
@@ -154,6 +166,12 @@ interface StoreState {
   splitSlot: (slotId: string, direction: 'h' | 'v') => void;
   addSlot: (pageIndex?: number, init?: Partial<Slot>) => void;
 
+  // ✅ Acciones de slot extra
+  duplicateSlot: (slotId: string) => void;
+  copySlot: (slotId: string) => void;
+  pasteSlot: (pageIndex?: number) => void;
+  deleteSlot: (slotId: string) => void; // ✅ NUEVA
+
   applyTemplateToPage: (templateId: string, pageIndex?: number) => void;
   shuffleCurrentPage: () => void;
   autoDesign: (photoIds: string[]) => Template[];
@@ -179,10 +197,6 @@ interface StoreState {
 // ============================================================
 
 export const useStore = create<StoreState>((set, get) => {
-  // ------------------------------------------------------------
-  // 4.2 / 4.3 — Proyecto inicial + newProject
-  // Ahora `createProject` recibe un AlbumSize completo.
-  // ------------------------------------------------------------
   const initialProject = createProject('Sin título', ALBUM_SIZES['10x10']);
 
   return {
@@ -203,14 +217,14 @@ export const useStore = create<StoreState>((set, get) => {
       preflightOpen: false,
       exportOpen: false,
       newProjectOpen: false,
-      autosaveAt: 0
+      autosaveAt: 0,
+      slotClipboard: null,
     },
     templates: [...BUILTIN_TEMPLATES, ...COVER_TEMPLATES],
     profiles: DEFAULT_PROFILES,
 
     // -------------------------------------------------------------
-    // 4.3 — NUEVO PROYECTO
-    // Acepta un AlbumSize completo (preset o personalizado).
+    // NUEVO PROYECTO
     // -------------------------------------------------------------
     newProject: (name, size) => set(s => ({
       history: pushHistory(s.history, createProject(name, size)),
@@ -519,6 +533,137 @@ export const useStore = create<StoreState>((set, get) => {
       };
     }),
 
+    // -------------------------------------------------------------
+    // ✅ Duplicar / Copiar / Pegar / Eliminar slot
+    // -------------------------------------------------------------
+    duplicateSlot: (slotId) => set(s => {
+      const project = s.history.present;
+      const pageIndex = findPageIndexBySlot(project.pages, slotId);
+      if (pageIndex < 0) return s;
+      const page = project.pages[pageIndex];
+      const slot = page.slots.find(sl => sl.id === slotId);
+      if (!slot) return s;
+
+      const gap = 2;
+      let x = slot.x + slot.w + gap;
+      let y = slot.y;
+      if (x + slot.w > 100) {
+        x = slot.x;
+        y = slot.y + slot.h + gap;
+      }
+      if (y + slot.h > 100) {
+        x = slot.x;
+        y = slot.y;
+      }
+
+      const clone: Slot = {
+        ...slot,
+        id: nanoid(8),
+        x,
+        y,
+        z: page.slots.length,
+      };
+
+      const updated: Page = { ...page, slots: [...page.slots, clone] };
+      const pages = project.pages.map((p, i) => i === pageIndex ? updated : p);
+
+      return {
+        history: pushHistory(s.history, { ...project, pages, updatedAt: Date.now() }),
+        ui: { ...s.ui, selectedSlotId: clone.id, selectedSlotIds: [clone.id] },
+      };
+    }),
+
+    copySlot: (slotId) => set(s => {
+      const project = s.history.present;
+      const pageIndex = findPageIndexBySlot(project.pages, slotId);
+      if (pageIndex < 0) return s;
+      const page = project.pages[pageIndex];
+      const slot = page.slots.find(sl => sl.id === slotId);
+      if (!slot) return s;
+
+      return {
+        ui: {
+          ...s.ui,
+          slotClipboard: {
+            w: slot.w,
+            h: slot.h,
+            fit: slot.fit,
+            offsetX: slot.offsetX,
+            offsetY: slot.offsetY,
+            zoom: slot.zoom,
+            rotation: slot.rotation,
+            photoId: slot.photoId,
+          },
+        },
+      };
+    }),
+
+    pasteSlot: (pageIndex) => set(s => {
+      const clip = s.ui.slotClipboard;
+      if (!clip) return s;
+
+      const project = s.history.present;
+      const idx = pageIndex ?? project.currentPageIndex;
+      const page = project.pages[idx];
+      if (!page) return s;
+
+      const baseX = 50 - clip.w / 2;
+      const baseY = 50 - clip.h / 2;
+      const jitter = Math.floor(Math.random() * 6) - 3;
+
+      const newSlot: Slot = {
+        id: nanoid(8),
+        x: Math.max(0, Math.min(100 - clip.w, baseX + jitter)),
+        y: Math.max(0, Math.min(100 - clip.h, baseY + jitter)),
+        w: clip.w,
+        h: clip.h,
+        photoId: clip.photoId,
+        fit: clip.fit,
+        offsetX: clip.offsetX,
+        offsetY: clip.offsetY,
+        zoom: clip.zoom,
+        rotation: clip.rotation,
+        locked: false,
+        z: page.slots.length,
+      };
+
+      const updated: Page = { ...page, slots: [...page.slots, newSlot] };
+      const pages = project.pages.map((p, i) => i === idx ? updated : p);
+
+      return {
+        history: pushHistory(s.history, { ...project, pages, updatedAt: Date.now() }),
+        ui: { ...s.ui, selectedSlotId: newSlot.id, selectedSlotIds: [newSlot.id] },
+      };
+    }),
+
+    // ✅ NUEVA: eliminar slot por completo (no solo vaciarlo)
+    deleteSlot: (slotId) => set(s => {
+      const project = s.history.present;
+      const pageIndex = findPageIndexBySlot(project.pages, slotId);
+      if (pageIndex < 0) return s;
+      const page = project.pages[pageIndex];
+      const updated: Page = {
+        ...page,
+        slots: page.slots.filter(sl => sl.id !== slotId),
+      };
+      const pages = project.pages.map((p, i) => i === pageIndex ? updated : p);
+
+      // Si el slot eliminado estaba seleccionado, limpiamos la selección
+      const stillSelected = s.ui.selectedSlotIds.filter(id => id !== slotId);
+      const nextPrimary = s.ui.selectedSlotId === slotId
+        ? (stillSelected[stillSelected.length - 1] ?? null)
+        : s.ui.selectedSlotId;
+
+      return {
+        history: pushHistory(s.history, { ...project, pages, updatedAt: Date.now() }),
+        ui: {
+          ...s.ui,
+          selectedSlotIds: stillSelected,
+          selectedSlotId: nextPrimary,
+        },
+      };
+    }),
+
     applyTemplateToPage: (templateId, pageIndex) => set(s => {
       const project = s.history.present;
       const idx = pageIndex ?? project.currentPageIndex;
@@ -781,8 +926,7 @@ function replacePage(project: Project, page: Page): Project {
 }
 
 // ============================================================
-// 4.1 — HOOK useAlbumSize
-// Devuelve el AlbumSize activo, ya sea un preset o un customSize.
+// HOOKS
 // ============================================================
 
 export const useCurrentProject = () => useStore(s => s.history.present);
