@@ -2,7 +2,9 @@
 
 import React, { useMemo, useState } from 'react';
 import { useStore } from '@/src/store/projectStore';
-import { LayoutTemplate, Wand2, RefreshCw } from 'lucide-react';
+import {
+  LayoutTemplate, Wand2, RefreshCw, ChevronDown, ChevronUp, Image as ImageIcon
+} from 'lucide-react';
 import { Template } from '@/src/types';
 import { suggestLayouts } from '@/src/engine/layoutEngine';
 
@@ -11,6 +13,8 @@ import { suggestLayouts } from '@/src/engine/layoutEngine';
  * - Si la página está vacía, propone plantillas aleatorias para la cantidad de fotos pendientes.
  * - Botón "Otra composición" (refresh) para regenerar las sugerencias.
  * - Botón "Shuffle" para barajar las fotos ya colocadas en el spread.
+ * - ✅ NUEVO: Botón para plegar/desplegar el panel.
+ * - ✅ NUEVO: Botón rápido para abrir las opciones de fondo del panel derecho.
  */
 export function LayoutSuggestions() {
   const project = useStore(s => s.history.present);
@@ -23,6 +27,9 @@ export function LayoutSuggestions() {
 
   // Contador para forzar regeneración de sugerencias
   const [refreshKey, setRefreshKey] = useState(0);
+
+  // ✅ NUEVO: Estado para plegar/desplegar
+  const [isCollapsed, setIsCollapsed] = useState(false);
 
   // Detectar fotos ya presentes en la página (asignadas a slots)
   const currentPhotoIds = page.slots.map(s => s.photoId).filter(Boolean) as string[];
@@ -65,31 +72,54 @@ export function LayoutSuggestions() {
 
   // Aplicar plantilla Y colocar las fotos pendientes en los slots en orden
   const applyWithPhotos = (template: Template) => {
+    // ✅ Activar el loader global mientras se aplica
+    setUI({
+      isLoading: true,
+      loadingMessage: `Aplicando "${template.name}"…`,
+    });
+
+    // Aplicamos la plantilla al instante
     applyTemplateToPage(template.id);
+
     // Las fotos se colocan en el siguiente tick, tras aplicar la plantilla
     setTimeout(() => {
-      const freshPage = useStore.getState().history.present.pages[
-        useStore.getState().history.present.currentPageIndex
-      ];
-      const pool = pendingPhotos.length > 0 ? pendingPhotos : project.photos;
-      freshPage.slots.forEach((sl, i) => {
-        if (i < pool.length && !sl.photoId) {
-          assignPhoto(sl.id, pool[i].id);
-        }
-      });
+      try {
+        const freshPage = useStore.getState().history.present.pages[
+          useStore.getState().history.present.currentPageIndex
+        ];
+        const pool = pendingPhotos.length > 0 ? pendingPhotos : project.photos;
+        freshPage.slots.forEach((sl, i) => {
+          if (i < pool.length && !sl.photoId) {
+            assignPhoto(sl.id, pool[i].id);
+          }
+        });
+      } catch (error) {
+        console.error('Error al asignar fotos:', error);
+      } finally {
+        // ✅ Ocultar el loader global
+        setUI({ isLoading: false, loadingMessage: '' });
+      }
     }, 0);
+  };
+
+  // ✅ NUEVO: Abrir las opciones de fondo en el panel derecho
+  const openBackgroundOptions = () => {
+    setUI({ rightPanelOpen: true });
   };
 
   return (
     <div className="absolute left-4 top-4 z-20 w-64 bg-evr-panel/95 backdrop-blur border border-evr-border rounded-lg shadow-2xl">
+      {/* ---------- Cabecera ---------- */}
       <div className="p-3 border-b border-evr-border flex items-center justify-between">
         <div className="flex items-center gap-2">
           <LayoutTemplate size={14} className="text-evr-accent" />
           <div>
             <div className="text-xs font-semibold">Sugerencias</div>
-            <div className="text-[10px] text-evr-muted">
-              {n} foto{n !== 1 ? 's' : ''} · página vacía
-            </div>
+            {!isCollapsed && (
+              <div className="text-[10px] text-evr-muted">
+                {n} foto{n !== 1 ? 's' : ''} · página vacía
+              </div>
+            )}
           </div>
         </div>
         <div className="flex gap-0.5">
@@ -100,61 +130,89 @@ export function LayoutSuggestions() {
           >
             <RefreshCw size={12} />
           </button>
+          {/* ✅ NUEVO: Botón de plegar/desplegar */}
           <button
-            className="btn-ghost p-1 text-[10px]"
-            onClick={() => setUI({ templateGalleryOpen: true })}
-            title="Ver todas las plantillas"
+            className="btn-ghost p-1"
+            onClick={() => setIsCollapsed(v => !v)}
+            title={isCollapsed ? 'Desplegar sugerencias' : 'Plegar sugerencias'}
           >
-            Ver todas
+            {isCollapsed ? <ChevronDown size={12} /> : <ChevronUp size={12} />}
           </button>
         </div>
       </div>
 
-      <div className="p-2 grid grid-cols-2 gap-1.5">
-        {candidates.map(t => (
-          <button
-            key={t.id}
-            onClick={() => applyWithPhotos(t)}
-            className="aspect-[1.4/1] bg-white rounded overflow-hidden border border-evr-border hover:border-evr-accent transition-colors relative"
-            title={t.name}
-          >
-            {t.slots.map((s, i) => (
-              <div
-                key={i}
-                className="absolute bg-neutral-300 border border-neutral-400"
-                style={{
-                  left: `${Math.min(s.x, 100)}%`,
-                  top: `${s.y}%`,
-                  width: `${Math.min(s.w, 100 - Math.min(s.x, 100))}%`,
-                  height: `${s.h}%`
-                }}
-              />
+      {/* ---------- Contenido (solo si no está plegado) ---------- */}
+      {!isCollapsed && (
+        <>
+          <div className="p-2 grid grid-cols-2 gap-1.5">
+            {candidates.map(t => (
+              <button
+                key={t.id}
+                onClick={() => applyWithPhotos(t)}
+                className="aspect-[1.4/1] bg-white rounded overflow-hidden border border-evr-border hover:border-evr-accent transition-colors relative"
+                title={t.name}
+              >
+                {t.slots.map((s, i) => (
+                  <div
+                    key={i}
+                    className="absolute bg-neutral-300 border border-neutral-400"
+                    style={{
+                      left: `${Math.min(s.x, 100)}%`,
+                      top: `${s.y}%`,
+                      width: `${Math.min(s.w, 100 - Math.min(s.x, 100))}%`,
+                      height: `${s.h}%`
+                    }}
+                  />
+                ))}
+                <div className="absolute bottom-0 left-0 right-0 bg-black/70 text-white text-[9px] py-0.5 px-1 truncate">
+                  {t.name}
+                </div>
+              </button>
             ))}
-            <div className="absolute bottom-0 left-0 right-0 bg-black/70 text-white text-[9px] py-0.5 px-1 truncate">
-              {t.name}
-            </div>
-          </button>
-        ))}
-        {candidates.length === 0 && (
-          <div className="col-span-2 text-center text-[10px] text-evr-muted py-4">
-            Sin sugerencias disponibles
+            {candidates.length === 0 && (
+              <div className="col-span-2 text-center text-[10px] text-evr-muted py-4">
+                Sin sugerencias disponibles
+              </div>
+            )}
           </div>
-        )}
-      </div>
 
-      {pendingPhotos.length > 0 && (
-        <div className="px-3 py-2 border-t border-evr-border flex items-center justify-between">
-          <div className="text-[10px] text-evr-muted">
-            {pendingPhotos.length} foto{pendingPhotos.length !== 1 ? 's' : ''} sin usar
+          {/* ---------- Acciones inferiores ---------- */}
+          <div className="px-3 py-2 border-t border-evr-border space-y-2">
+            {/* Botón de opciones de fondo */}
+            <button
+              className="btn-outline w-full text-xs flex items-center justify-center gap-1.5"
+              onClick={openBackgroundOptions}
+              title="Abrir las opciones de fondo en el panel derecho"
+            >
+              <ImageIcon size={12} /> Opciones de fondo
+            </button>
+
+            {/* Botón de ver todas las plantillas */}
+            <button
+              className="btn-outline w-full text-xs flex items-center justify-center gap-1.5"
+              onClick={() => setUI({ templateGalleryOpen: true })}
+              title="Ver todas las plantillas disponibles"
+            >
+              <LayoutTemplate size={12} /> Ver todas las plantillas
+            </button>
+
+            {/* Shuffle (si hay fotos pendientes) */}
+            {pendingPhotos.length > 0 && (
+              <div className="flex items-center justify-between pt-1">
+                <div className="text-[10px] text-evr-muted">
+                  {pendingPhotos.length} foto{pendingPhotos.length !== 1 ? 's' : ''} sin usar
+                </div>
+                <button
+                  className="btn-ghost p-1 text-[10px] flex items-center gap-1"
+                  onClick={() => shuffleCurrentPage()}
+                  title="Otra composición"
+                >
+                  <Wand2 size={11} /> Shuffle
+                </button>
+              </div>
+            )}
           </div>
-          <button
-            className="btn-ghost p-1 text-[10px] flex items-center gap-1"
-            onClick={() => shuffleCurrentPage()}
-            title="Otra composición"
-          >
-            <Wand2 size={11} /> Shuffle
-          </button>
-        </div>
+        </>
       )}
     </div>
   );

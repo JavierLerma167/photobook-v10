@@ -33,6 +33,9 @@ export function ExportDialog() {
   const handlePdf = async () => {
     setBusy(true);
     setProgress('Generando PDF…');
+    // ✅ NUEVO: Activar el loader global
+    setUI({ isLoading: true, loadingMessage: 'Generando PDF…' });
+
     try {
       const blob = await exportProjectToPdf(project, size, {
         id: 'tmp', name: 'tmp', sizeId: size.id, dpi, bleedIn: size.bleedIn,
@@ -45,14 +48,23 @@ export function ExportDialog() {
     } finally {
       setBusy(false);
       setProgress('');
+      // ✅ NUEVO: Ocultar el loader global
+      setUI({ isLoading: false, loadingMessage: '' });
     }
   };
 
   const handleJpegs = async () => {
     setBusy(true);
+    // ✅ NUEVO: Activar el loader global
+    setUI({ isLoading: true, loadingMessage: 'Exportando imágenes…' });
+
     try {
       for (let i = 0; i < project.pages.length; i++) {
-        setProgress(`Exportando página ${i + 1} / ${project.pages.length}…`);
+        const msg = `Exportando página ${i + 1} / ${project.pages.length}…`;
+        setProgress(msg);
+        // ✅ Actualizamos también el mensaje global
+        setUI({ loadingMessage: msg });
+
         const blob = await exportPageToJpeg(project, i, size, dpi);
         download(blob, `${project.name.replace(/\s+/g, '_')}_p${String(i).padStart(2, '0')}.jpg`);
         await new Promise(r => setTimeout(r, 120));
@@ -62,6 +74,8 @@ export function ExportDialog() {
     } finally {
       setBusy(false);
       setProgress('');
+      // ✅ NUEVO: Ocultar el loader global
+      setUI({ isLoading: false, loadingMessage: '' });
     }
   };
 

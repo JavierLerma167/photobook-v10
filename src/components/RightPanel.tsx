@@ -72,6 +72,11 @@ export function RightPanel() {
     updateCurrentPage({ backgroundImageOpacity: op });
   };
 
+  // ✅ NUEVO: Setter para el desenfoque
+  const setBackgroundImageBlur = (blur: number) => {
+    updateCurrentPage({ backgroundImageBlur: blur });
+  };
+
   const setBackgroundOverlay = (color: string | null) => {
     updateCurrentPage({ backgroundOverlay: color });
   };
@@ -156,6 +161,54 @@ export function RightPanel() {
             </div>
 
             {photo && <ResolutionBadge photo={photo} slot={slot} />}
+
+            {/* ✅ NUEVO: Sección de bordes del marco */}
+            <div className="border-t border-evr-border pt-3 mt-3">
+              <div className="text-[10px] text-evr-muted uppercase tracking-wide mb-1.5">
+                Borde del marco
+              </div>
+              <div className="grid grid-cols-2 gap-2 mb-2">
+                <NumberField
+                  label="Grosor (px)"
+                  value={slot.borderWidth || 0}
+                  onChange={v => updateSlot(slot.id, { borderWidth: v })}
+                />
+                <NumberField
+                  label="Radio (px)"
+                  value={slot.borderRadius || 0}
+                  onChange={v => updateSlot(slot.id, { borderRadius: v })}
+                />
+              </div>
+              <div className="flex gap-2 mb-2">
+                <select
+                  className="input text-xs flex-1"
+                  value={slot.borderStyle || 'solid'}
+                  onChange={e => updateSlot(slot.id, { borderStyle: e.target.value as any })}
+                >
+                  <option value="solid">Sólido</option>
+                  <option value="dashed">Discontinuo</option>
+                  <option value="dotted">Punteado</option>
+                </select>
+                <input
+                  type="color"
+                  className="w-8 h-8 rounded cursor-pointer border border-evr-border"
+                  value={slot.borderColor || '#000000'}
+                  onChange={e => updateSlot(slot.id, { borderColor: e.target.value })}
+                />
+              </div>
+              <button
+                className="btn-outline w-full text-xs"
+                onClick={() => updateSlot(slot.id, {
+                  borderWidth: 0,
+                  borderColor: 'transparent',
+                  borderStyle: 'solid',
+                  borderRadius: 0
+                })}
+                title="Quitar el borde personalizado"
+              >
+                Quitar borde
+              </button>
+            </div>
 
             <MergeSplitTools slot={slot} />
             <AlignTools slot={slot} page={page} />
@@ -498,6 +551,23 @@ export function RightPanel() {
                 step={0.01}
                 value={page.backgroundImageOpacity ?? 1}
                 onChange={e => setBackgroundImageOpacity(parseFloat(e.target.value))}
+                className="w-full accent-evr-accent"
+              />
+            </div>
+
+            {/* ✅ NUEVO: Slider de Desenfoque */}
+            <div>
+              <div className="flex justify-between text-[10px] text-evr-muted mb-0.5">
+                <span>Desenfoque</span>
+                <span>{page.backgroundImageBlur ?? 0}px</span>
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={40}
+                step={1}
+                value={page.backgroundImageBlur ?? 0}
+                onChange={e => setBackgroundImageBlur(parseInt(e.target.value))}
                 className="w-full accent-evr-accent"
               />
             </div>

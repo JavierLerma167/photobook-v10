@@ -2,7 +2,7 @@
 import { create } from 'zustand';
 import { nanoid } from 'nanoid';
 import {
-  Project, Photo, Page, Slot, TextElement, AlbumSizeId, PrintProfile, Template, AlbumSize, SlotFit
+  Project, Photo, Page, Slot, TextElement, AlbumSizeId, PrintProfile, Template, AlbumSize, SlotFit, Folder
 } from '@/src/types';
 import { BUILTIN_TEMPLATES, COVER_TEMPLATES } from '@/src/engine/templates';
 import { applyTemplate, assignPhotoToSlot, shufflePhotos, suggestLayouts } from '@/src/engine/layoutEngine';
@@ -48,10 +48,6 @@ function createEmptyPage(kind: 'cover' | 'spread' = 'spread'): Page {
 
 /**
  * Crea un proyecto nuevo.
- *
- * Acepta un `AlbumSize` completo en lugar de solo un `sizeId`, de modo que
- * los tamaños personalizados (con unidad, orientación y DPI propios) se
- * guarden en `customSize` y no dependan de `ALBUM_SIZES`.
  */
 export function createProject(name: string, size: AlbumSize): Project {
   const isCustom = size.id === 'custom';
@@ -70,7 +66,9 @@ export function createProject(name: string, size: AlbumSize): Project {
       createEmptyPage('spread'),
     ],
     photos: [],
-    currentPageIndex: 0
+    currentPageIndex: 0,
+    // ✅ NUEVO: Inicializamos las carpetas
+    folders: [],
   };
 }
 
@@ -121,6 +119,9 @@ interface UIState {
   newProjectOpen: boolean;
   autosaveAt: number;
 
+  // ✅ NUEVO: Vista de cuadrícula
+  gridViewOpen: boolean;
+
   // ✅ Portapapeles de slots
   slotClipboard: {
     w: number;
@@ -132,6 +133,12 @@ interface UIState {
     rotation: number;
     photoId: string | null;
   } | null;
+
+  // ✅ NUEVO: Estado global de carga
+  /** Si es `true`, la app está realizando una operación pesada. */
+  isLoading: boolean;
+  /** Mensaje que se muestra debajo del spinner. */
+  loadingMessage: string;
 }
 
 interface StoreState {
@@ -140,7 +147,6 @@ interface StoreState {
   templates: Template[];
   profiles: PrintProfile[];
 
-  // Cambia la firma: ahora recibe un AlbumSize completo
   newProject: (name: string, size: AlbumSize) => void;
   setProject: (p: Project) => void;
   renameProject: (name: string) => void;
@@ -159,6 +165,9 @@ interface StoreState {
   deletePage: (index: number) => void;
   togglePageSpan: (pageIndex: number) => void;
 
+  // ✅ Reordenar páginas
+  reorderPages: (fromIndex: number, toIndex: number) => void;
+
   assignPhoto: (slotId: string, photoId: string) => void;
   clearSlot: (slotId: string) => void;
   updateSlot: (slotId: string, patch: Partial<Slot>) => void;
@@ -166,11 +175,10 @@ interface StoreState {
   splitSlot: (slotId: string, direction: 'h' | 'v') => void;
   addSlot: (pageIndex?: number, init?: Partial<Slot>) => void;
 
-  // ✅ Acciones de slot extra
   duplicateSlot: (slotId: string) => void;
   copySlot: (slotId: string) => void;
   pasteSlot: (pageIndex?: number) => void;
-  deleteSlot: (slotId: string) => void; // ✅ NUEVA
+  deleteSlot: (slotId: string) => void;
 
   applyTemplateToPage: (templateId: string, pageIndex?: number) => void;
   shuffleCurrentPage: () => void;
@@ -190,6 +198,12 @@ interface StoreState {
 
   saveLocal: () => void;
   loadLocal: () => boolean;
+
+  // ✅ Acciones de carpetas
+  addFolder: (name?: string) => string;
+  renameFolder: (folderId: string, name: string) => void;
+  deleteFolder: (folderId: string) => void;
+  movePhotoToFolder: (photoIds: string[], folderId: string | null) => void;
 }
 
 // ============================================================
@@ -218,7 +232,11 @@ export const useStore = create<StoreState>((set, get) => {
       exportOpen: false,
       newProjectOpen: false,
       autosaveAt: 0,
+      gridViewOpen: false,
       slotClipboard: null,
+      // ✅ NUEVO: Inicialización del estado de carga
+      isLoading: false,
+      loadingMessage: '',
     },
     templates: [...BUILTIN_TEMPLATES, ...COVER_TEMPLATES],
     profiles: DEFAULT_PROFILES,
@@ -235,7 +253,8 @@ export const useStore = create<StoreState>((set, get) => {
         selectedTextId: null,
         zoom: 0.5,
         panX: 0,
-        panY: 0
+        panY: 0,
+        gridViewOpen: false
       }
     })),
 
@@ -243,10 +262,18 @@ export const useStore = create<StoreState>((set, get) => {
 
     renameProject: (name) => set(s => commit(s, { ...s.history.present, name })),
 
-    importPhotos: (photos) => set(s => commit(s, {
-      ...s.history.present,
-      photos: [...s.history.present.photos, ...photos]
-    })),
+    importPhotos: (photos) => set(s => {
+      try {
+        return commit(s, {
+          ...s.history.present,
+          photos: [...s.history.present.photos, ...photos]
+        });
+      } catch (error) {
+        console.error("Error al importar fotos:", error);
+        alert("El almacenamiento local está lleno. Intenta con imágenes más ligeras o elimina algunas.");
+        return s;
+      }
+    }),
 
     removePhoto: (id) => set(s => commit(s, {
       ...s.history.present,
@@ -267,6 +294,60 @@ export const useStore = create<StoreState>((set, get) => {
       const [it] = photos.splice(from, 1);
       photos.splice(to, 0, it);
       return commit(s, { ...s.history.present, photos });
+    }),
+
+    // -------------------------------------------------------------
+    // ✅ ACCIONES DE CARPETAS
+    // -------------------------------------------------------------
+    addFolder: (name) => {
+      const folderId = nanoid(10);
+      set(s => {
+        const project = s.history.present;
+        const newFolder: Folder = {
+          id: folderId,
+          name: name?.trim() || `Carpeta ${project.folders.length + 1}`,
+          createdAt: Date.now(),
+        };
+        return commit(s, {
+          ...project,
+          folders: [...project.folders, newFolder],
+        });
+      });
+      return folderId;
+    },
+
+    renameFolder: (folderId, name) => set(s => {
+      const project = s.history.present;
+      const trimmed = name.trim();
+      if (!trimmed) return s;
+      return commit(s, {
+        ...project,
+        folders: project.folders.map(f =>
+          f.id === folderId ? { ...f, name: trimmed } : f
+        ),
+      });
+    }),
+
+    deleteFolder: (folderId) => set(s => {
+      const project = s.history.present;
+      return commit(s, {
+        ...project,
+        folders: project.folders.filter(f => f.id !== folderId),
+        photos: project.photos.map(p =>
+          p.folderId === folderId ? { ...p, folderId: null } : p
+        ),
+      });
+    }),
+
+    movePhotoToFolder: (photoIds, folderId) => set(s => {
+      const project = s.history.present;
+      const idSet = new Set(photoIds);
+      return commit(s, {
+        ...project,
+        photos: project.photos.map(p =>
+          idSet.has(p.id) ? { ...p, folderId } : p
+        ),
+      });
     }),
 
     // -------------------------------------------------------------
@@ -383,6 +464,38 @@ export const useStore = create<StoreState>((set, get) => {
       const updated: Page = { ...page, spanNext: !page.spanNext };
       const pages = project.pages.map((p, i) => i === pageIndex ? updated : p);
       return commit(s, { ...project, pages });
+    }),
+
+    // ✅ Reordenar páginas
+    reorderPages: (fromIndex, toIndex) => set(s => {
+      const project = s.history.present;
+      const pages = [...project.pages];
+      
+      if (fromIndex < 0 || fromIndex >= pages.length || toIndex < 0 || toIndex >= pages.length) return s;
+      if (fromIndex === toIndex) return s;
+
+      const [movedPage] = pages.splice(fromIndex, 1);
+      pages.splice(toIndex, 0, movedPage);
+
+      let newCurrentIndex = project.currentPageIndex;
+      
+      if (project.currentPageIndex === fromIndex) {
+        newCurrentIndex = toIndex;
+      } else if (
+        project.currentPageIndex > fromIndex && 
+        project.currentPageIndex <= toIndex
+      ) {
+        newCurrentIndex--;
+      } else if (
+        project.currentPageIndex < fromIndex && 
+        project.currentPageIndex >= toIndex
+      ) {
+        newCurrentIndex++;
+      }
+
+      const normalizedIndex = normalizePageIndex(newCurrentIndex, pages);
+
+      return commit(s, { ...project, pages, currentPageIndex: normalizedIndex });
     }),
 
     // -------------------------------------------------------------
@@ -636,7 +749,6 @@ export const useStore = create<StoreState>((set, get) => {
       };
     }),
 
-    // ✅ NUEVA: eliminar slot por completo (no solo vaciarlo)
     deleteSlot: (slotId) => set(s => {
       const project = s.history.present;
       const pageIndex = findPageIndexBySlot(project.pages, slotId);
@@ -648,7 +760,6 @@ export const useStore = create<StoreState>((set, get) => {
       };
       const pages = project.pages.map((p, i) => i === pageIndex ? updated : p);
 
-      // Si el slot eliminado estaba seleccionado, limpiamos la selección
       const stillSelected = s.ui.selectedSlotIds.filter(id => id !== slotId);
       const nextPrimary = s.ui.selectedSlotId === slotId
         ? (stillSelected[stillSelected.length - 1] ?? null)
@@ -884,15 +995,15 @@ export const useStore = create<StoreState>((set, get) => {
     saveLocal: () => {
       const s = get();
       const project = s.history.present;
-      const serializable = {
-        ...project,
-        photos: project.photos.map(p => ({ ...p, url: '', proxyUrl: '' }))
-      };
-      localStorage.setItem('evr:autosave', JSON.stringify({
-        project: serializable,
-        savedAt: Date.now()
-      }));
-      set(st => ({ ui: { ...st.ui, autosaveAt: Date.now() } }));
+      try {
+        localStorage.setItem('evr:autosave', JSON.stringify({
+          project,
+          savedAt: Date.now()
+        }));
+        set(st => ({ ui: { ...st.ui, autosaveAt: Date.now() } }));
+      } catch (error) {
+        console.warn("No se pudo guardar automáticamente (posible límite de almacenamiento excedido):", error);
+      }
     },
 
     loadLocal: () => {
@@ -900,8 +1011,20 @@ export const useStore = create<StoreState>((set, get) => {
       if (!raw) return false;
       try {
         const data = JSON.parse(raw);
+        if (!data.project) return false;
+
+        // ✅ Compatibilidad con proyectos antiguos que no tenían folders
+        const project: Project = {
+          ...data.project,
+          folders: data.project.folders ?? [],
+        };
+        
         set(s => ({
-          history: pushHistory(s.history, data.project),
+          history: {
+            past: [],
+            present: project,
+            future: []
+          },
           ui: { ...s.ui, autosaveAt: Date.now() }
         }));
         return true;
@@ -934,19 +1057,9 @@ export const useCurrentProject = () => useStore(s => s.history.present);
 export const useCurrentPage = () =>
   useStore(s => s.history.present.pages[s.history.present.currentPageIndex]);
 
-/**
- * Devuelve el `AlbumSize` activo.
- *
- * - Si el proyecto tiene `customSize` (tamaño personalizado), lo devuelve.
- * - Si no, busca el preset en `ALBUM_SIZES` por `sizeId`.
- *
- * Esto garantiza que el resto del código (Spread, preflight, export…)
- * funcione igual tanto con presets como con tamaños personalizados.
- */
 export const useAlbumSize = (): AlbumSize => {
   const project = useStore(s => s.history.present);
   if (project.customSize) return project.customSize;
   const preset = ALBUM_SIZES[project.sizeId as Exclude<AlbumSizeId, 'custom'>];
-  // Fallback defensivo por si el sizeId no existe
   return preset ?? ALBUM_SIZES['10x10'];
 };

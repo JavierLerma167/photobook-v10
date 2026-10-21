@@ -113,7 +113,7 @@ export function Spread({ size, zoom }: Props) {
 }
 
 /* ============================================================
- * Fondo de página (color + imagen/textura + overlay)
+ * Fondo de página (color + imagen/textura + overlay + blur)
  * ============================================================ */
 function PageBackground({ page }: { page: Page }) {
   const bg = page.background || '#ffffff';
@@ -121,6 +121,8 @@ function PageBackground({ page }: { page: Page }) {
   const fit = page.backgroundImageFit || 'cover';
   const opacity = page.backgroundImageOpacity ?? 1;
   const overlay = page.backgroundOverlay;
+  // ✅ NUEVO: Leemos el valor del desenfoque
+  const blur = page.backgroundImageBlur ?? 0;
 
   return (
     <>
@@ -137,6 +139,10 @@ function PageBackground({ page }: { page: Page }) {
             backgroundSize: fit === 'repeat' ? 'auto' : fit,
             backgroundRepeat: fit === 'repeat' ? 'repeat' : 'no-repeat',
             backgroundPosition: 'center center',
+            // ✅ NUEVO: Filtro de desenfoque
+            filter: `blur(${blur}px)`,
+            // ✅ NUEVO: Escalar ligeramente si hay blur para evitar bordes blancos
+            transform: blur > 0 ? 'scale(1.05)' : 'none',
           }}
         />
       )}
@@ -393,17 +399,19 @@ function SpannedPage({
 }
 
 /* ============================================================
- * Contenido interno de una página (slots + textos + drop handler)
+ * Contenido interno de una página (slots + textos + drop + marquee)
  *
  * Acepta drops de:
  *  - application/x-evr-photos  → JSON con array de IDs (grupo)
  *  - application/x-evr-photo   → ID individual
  *
  * Comportamiento:
- *  - Página VACÍA (ningún slot con foto):
- *      → genera una plantilla AUTO Full Bleed con N slots
- *  - Página con fotos:
- *      → CREA slots NUEVOS (uno por foto) sin tocar los existentes
+ *  - Página VACÍA → genera una plantilla AUTO Full Bleed con N slots
+ *  - Página con fotos → CREA slots NUEVOS sin tocar los existentes
+ *
+ * Además:
+ *  - Clic en fondo + arrastrar → marquee de selección múltiple
+ *  - Clic en fondo sin mover → limpia la selección
  * ============================================================ */
 function PageInner({
   page, pageWidth, pageHeight, safe, showGuides, showGrid, selectedSlotId, selectedTextId
@@ -417,9 +425,100 @@ function PageInner({
   selectedSlotId: string | null;
   selectedTextId: string | null;
 }) {
+  const clearSlotSelection = useStore(s => s.clearSlotSelection);
+
   const [isDragOverEmpty, setIsDragOverEmpty] = useState(false);
 
+  // Estado del marquee (rectángulo de selección)
+  const [marquee, setMarquee] = useState<{
+    startX: number;
+    startY: number;
+    endX: number;
+    endY: number;
+  } | null>(null);
+
   const empty = isPageEmpty(page);
+
+  // -------------------------------------------------------------
+  // Marquee: clic en fondo + arrastrar
+  // -------------------------------------------------------------
+  const onPageMouseDown = (e: React.MouseEvent) => {
+    // Solo botón izquierdo
+    if (e.button !== 0) return;
+    // Solo cuando el target es el fondo (no un slot)
+    if (e.target !== e.currentTarget) return;
+
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const startX = e.clientX - rect.left;
+    const startY = e.clientY - rect.top;
+
+    setMarquee({ startX, startY, endX: startX, endY: startY });
+
+    const onMove = (ev: MouseEvent) => {
+      const ex = ev.clientX - rect.left;
+      const ey = ev.clientY - rect.top;
+      setMarquee({ startX, startY, endX: ex, endY: ey });
+    };
+
+    const onUp = (ev: MouseEvent) => {
+      const ex = ev.clientX - rect.left;
+      const ey = ev.clientY - rect.top;
+
+      const x1 = Math.min(startX, ex);
+      const y1 = Math.min(startY, ey);
+      const x2 = Math.max(startX, ex);
+      const y2 = Math.max(startY, ey);
+
+      const moved = Math.abs(x2 - x1) > 4 || Math.abs(y2 - y1) > 4;
+
+      if (!moved) {
+        // Clic simple en fondo → deseleccionar
+        clearSlotSelection();
+      } else {
+        // Seleccionar slots intersectados con el rectángulo
+        const scaleX = 100 / pageWidth;
+        const scaleY = 100 / pageHeight;
+
+        const rectPct = {
+          x1: x1 * scaleX,
+          y1: y1 * scaleY,
+          x2: x2 * scaleX,
+          y2: y2 * scaleY,
+        };
+
+        const hits = page.slots.filter(s => {
+          const sx1 = s.x;
+          const sy1 = s.y;
+          const sx2 = s.x + s.w;
+          const sy2 = s.y + s.h;
+
+          const overlapX = sx1 < rectPct.x2 && sx2 > rectPct.x1;
+          const overlapY = sy1 < rectPct.y2 && sy2 > rectPct.y1;
+          return overlapX && overlapY;
+        });
+
+        if (hits.length > 0) {
+          useStore.setState(st => ({
+            ui: {
+              ...st.ui,
+              selectedSlotIds: hits.map(h => h.id),
+              selectedSlotId: hits[hits.length - 1].id,
+              selectedTextId: null,
+            },
+          }));
+        } else {
+          clearSlotSelection();
+        }
+      }
+
+      setMarquee(null);
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  };
 
   // -------------------------------------------------------------
   // Drag over
@@ -473,6 +572,7 @@ function PageInner({
   return (
     <div
       className="absolute inset-0"
+      onMouseDown={onPageMouseDown}
       onDrop={handleDrop}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
@@ -484,6 +584,19 @@ function PageInner({
             Suelta para crear Full Bleed
           </div>
         </div>
+      )}
+
+      {/* Rectángulo de marquee */}
+      {marquee && (
+        <div
+          className="absolute pointer-events-none border-2 border-evr-accent bg-evr-accent/10 z-40"
+          style={{
+            left: Math.min(marquee.startX, marquee.endX),
+            top: Math.min(marquee.startY, marquee.endY),
+            width: Math.abs(marquee.endX - marquee.startX),
+            height: Math.abs(marquee.endY - marquee.startY),
+          }}
+        />
       )}
 
       {showGrid && (
@@ -617,8 +730,7 @@ function createSlotsForPhotos(page: Page, photoIds: string[]) {
 
   const nextPages = pages.map((p, i) => (i === pageIndex ? updatedPage : p));
 
-  // Seleccionamos el último slot creado (el más reciente) para que el usuario
-  // pueda moverlo/ajustarlo inmediatamente
+  // Seleccionamos el último slot creado (el más reciente)
   const lastSlot = newSlots[newSlots.length - 1];
 
   useStore.setState(s => ({

@@ -10,6 +10,8 @@ import { TemplateGallery } from '@/src/components/TemplateGallery';
 import { PreflightPanel } from '@/src/components/PreflightPanel';
 import { ExportDialog } from '@/src/components/ExportDialog';
 import { NewProjectDialog } from '@/src/components/NewProjectDialog';
+import { GridViewModal } from '@/src/components/GridViewModal';
+import { GlobalLoader } from '@/src/components/GlobalLoader';
 import { useStore } from '@/src/store/projectStore';
 import { loadAllFonts } from '@/src/engine/assets';
 
@@ -34,10 +36,19 @@ export default function Page() {
   const slotClipboard = useStore(s => s.ui.slotClipboard);
 
   // -------------------------------------------------------------
-  // Cargar todas las fuentes de Google Fonts al inicio
+  // Inicialización: fuentes + cargar autoguardado
   // -------------------------------------------------------------
   useEffect(() => {
+    // 1. Cargar todas las fuentes de Google Fonts
     loadAllFonts();
+    
+    // 2. Intentar cargar el proyecto guardado previamente
+    const loaded = useStore.getState().loadLocal();
+    if (loaded) {
+      console.log('✅ Proyecto restaurado desde el autoguardado local.');
+    } else {
+      console.log('🆕 Iniciando nuevo proyecto (no hay autoguardado).');
+    }
   }, []);
 
   // -------------------------------------------------------------
@@ -314,6 +325,10 @@ export default function Page() {
       <PreflightPanel />
       <ExportDialog />
       <NewProjectDialog />
+      <GridViewModal />
+
+      {/* ✅ NUEVO: Loader global (siempre al final para que quede encima de todo) */}
+      <GlobalLoader />
     </div>
   );
 }

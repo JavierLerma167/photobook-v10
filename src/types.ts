@@ -47,6 +47,18 @@ export interface Photo {
   sizeBytes: number;
   favorite: boolean;
   createdAt: number;
+
+  // ✅ NUEVO: Carpeta a la que pertenece la foto (null = sin carpeta)
+  /** ID de la carpeta contenedora. `null` significa "sin carpeta". */
+  folderId?: string | null;
+}
+
+// ✅ NUEVO: Carpetas para organizar la biblioteca de fotos
+export interface Folder {
+  id: string;
+  name: string;
+  /** Fecha de creación (opcional, útil para ordenar). */
+  createdAt: number;
 }
 
 // ============================================================
@@ -54,6 +66,7 @@ export interface Photo {
 // ============================================================
 
 export type SlotFit = 'cover' | 'contain' | 'fill';
+export type SlotBorderStyle = 'solid' | 'dashed' | 'dotted' | 'none';
 
 export interface Slot {
   id: string;
@@ -69,6 +82,16 @@ export interface Slot {
   rotation: number;
   locked: boolean;
   z: number;
+
+  // ✅ NUEVOS: Propiedades del marco (borde)
+  /** Grosor del borde en píxeles. */
+  borderWidth?: number;
+  /** Color del borde (hex). */
+  borderColor?: string;
+  /** Estilo del borde. */
+  borderStyle?: SlotBorderStyle;
+  /** Radio de las esquinas en píxeles. */
+  borderRadius?: number;
 }
 
 // ============================================================
@@ -174,6 +197,10 @@ export interface Project {
   createdAt: number;
   updatedAt: number;
   printProfileId: string;
+
+  // ✅ NUEVO: Carpetas del proyecto para organizar las fotos
+  /** Lista de carpetas creadas por el usuario. */
+  folders: Folder[];
 }
 
 // ============================================================

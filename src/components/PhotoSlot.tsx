@@ -313,6 +313,10 @@ export function SlotView({ slot, page, pageWidth, pageHeight, offsetX, viewWidth
 
   // -------------------------------------------------------------
   // Redimensionar con 8 handles
+  //
+  // - Si el slot NO está en multi-selección → redimensiona solo este
+  // - Si el slot SÍ está en multi-selección → redimensiona TODO el grupo
+  //   proporcionalmente desde el bounding box del grupo.
   // -------------------------------------------------------------
   const beginResize = (e: React.MouseEvent, handle: HandlePos) => {
     if (slot.locked) return;
@@ -325,13 +329,91 @@ export function SlotView({ slot, page, pageWidth, pageHeight, offsetX, viewWidth
 
     const startX = e.clientX;
     const startY = e.clientY;
-    const start = { x: slot.x, y: slot.y, w: slot.w, h: slot.h };
+
+    // ¿Es multi-resize?
+    const isMultiResize = selectedIds.length > 1 && selectedIds.includes(slot.id);
+
+    // Snapshot del grupo: guardamos posición y tamaño de cada slot
+    const groupSnapshot = isMultiResize
+      ? (selectedIds
+          .map(id => {
+            const s = page.slots.find(x => x.id === id);
+            return s ? { id, x: s.x, y: s.y, w: s.w, h: s.h } : null;
+          })
+          .filter(Boolean) as Array<{ id: string; x: number; y: number; w: number; h: number }>)
+      : [{ id: slot.id, x: slot.x, y: slot.y, w: slot.w, h: slot.h }];
+
+    if (groupSnapshot.length === 0) return;
+
+    // Bounding box del grupo (para calcular el factor de escala)
+    const bbox = groupSnapshot.reduce(
+      (acc, s) => ({
+        minX: Math.min(acc.minX, s.x),
+        minY: Math.min(acc.minY, s.y),
+        maxX: Math.max(acc.maxX, s.x + s.w),
+        maxY: Math.max(acc.maxY, s.y + s.h),
+      }),
+      {
+        minX: Infinity,
+        minY: Infinity,
+        maxX: -Infinity,
+        maxY: -Infinity,
+      }
+    );
+
     const { xTargets, yTargets } = computeSnapTargets(true);
 
     const onMove = (ev: MouseEvent) => {
       const dxPct = ((ev.clientX - startX) / pageWidth) * 100;
       const dyPct = ((ev.clientY - startY) / pageHeight) * 100;
 
+      // ========================================================
+      // MULTI-RESIZE
+      // ========================================================
+      if (isMultiResize) {
+        // Nuevos límites del bbox tras el arrastre del handle
+        let newMinX = bbox.minX;
+        let newMinY = bbox.minY;
+        let newMaxX = bbox.maxX;
+        let newMaxY = bbox.maxY;
+
+        if (handle.includes('w')) newMinX = bbox.minX + dxPct;
+        if (handle.includes('e')) newMaxX = bbox.maxX + dxPct;
+        if (handle.includes('n')) newMinY = bbox.minY + dyPct;
+        if (handle.includes('s')) newMaxY = bbox.maxY + dyPct;
+
+        // Evitamos que el bbox colapse
+        const minSize = 3;
+        if (newMaxX - newMinX < minSize) newMaxX = newMinX + minSize;
+        if (newMaxY - newMinY < minSize) newMaxY = newMinY + minSize;
+
+        const oldW = bbox.maxX - bbox.minX;
+        const oldH = bbox.maxY - bbox.minY;
+        const newW = newMaxX - newMinX;
+        const newH = newMaxY - newMinY;
+
+        const sx = oldW > 0 ? newW / oldW : 1;
+        const sy = oldH > 0 ? newH / oldH : 1;
+
+        // Aplicamos la escala a cada slot del grupo
+        const state = useStore.getState();
+        groupSnapshot.forEach(s => {
+          const relX = s.x - bbox.minX;
+          const relY = s.y - bbox.minY;
+          state.updateSlot(s.id, {
+            x: newMinX + relX * sx,
+            y: newMinY + relY * sy,
+            w: Math.max(3, s.w * sx),
+            h: Math.max(3, s.h * sy),
+          });
+        });
+        return;
+      }
+
+      // ========================================================
+      // SINGLE-RESIZE (comportamiento original)
+      // ========================================================
+      const start = groupSnapshot[0];
       let x = start.x;
       let y = start.y;
       let newW = start.w;
@@ -369,6 +451,7 @@ export function SlotView({ slot, page, pageWidth, pageHeight, offsetX, viewWidth
 
       updateSlot(slot.id, { x, y, w: newW, h: newH });
     };
+
     const onUp = () => {
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
@@ -418,7 +501,8 @@ export function SlotView({ slot, page, pageWidth, pageHeight, offsetX, viewWidth
     w: 'ew-resize',
   };
 
-  const showHandles = isPrimary && !slot.locked && !isMultiSelected;
+  // ✅ Ahora mostramos handles si el slot es el primary (esté solo o en grupo)
+  const showHandles = isPrimary && !slot.locked;
 
   const ringClass = dragOver
     ? 'ring-2 ring-evr-accent'
@@ -430,6 +514,14 @@ export function SlotView({ slot, page, pageWidth, pageHeight, offsetX, viewWidth
 
   const slotBackground = slot.fit === 'contain' ? '#1a1d23' : '#f5f5f5';
 
+  // ✅ NUEVO: Estilos del borde/marco personalizado
+  const borderStyle: React.CSSProperties = {
+    borderWidth: slot.borderWidth ?? 0,
+    borderColor: slot.borderColor ?? 'transparent',
+    borderStyle: slot.borderStyle ?? 'solid',
+    borderRadius: slot.borderRadius ?? 0,
+  };
+
   return (
     <>
       <div
@@ -440,6 +532,9 @@ export function SlotView({ slot, page, pageWidth, pageHeight, offsetX, viewWidth
           width: w,
           height: h,
           cursor: slot.locked ? 'not-allowed' : 'move',
+          // ✅ NUEVO: Aplicamos las propiedades del marco
+          ...borderStyle,
+          boxSizing: 'border-box',
         }}
         onDragOver={handleDragOver}
         onDragLeave={() => setDragOver(false)}
@@ -453,7 +548,11 @@ export function SlotView({ slot, page, pageWidth, pageHeight, offsetX, viewWidth
       >
         <div
           className="w-full h-full overflow-hidden relative"
-          style={{ background: slotBackground }}
+          style={{
+            background: slotBackground,
+            // ✅ NUEVO: Heredamos el border-radius para que la foto se recorte igual que el marco
+            borderRadius: slot.borderRadius ?? 0,
+          }}
         >
           {photo ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -479,7 +578,7 @@ export function SlotView({ slot, page, pageWidth, pageHeight, offsetX, viewWidth
           )}
         </div>
 
-        {/* 8 handles de resize */}
+        {/* 8 handles de resize (single o multi) */}
         {showHandles && (
           <>
             {(['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'] as HandlePos[]).map(h => {
