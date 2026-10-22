@@ -41,14 +41,16 @@ export default function Page() {
   useEffect(() => {
     // 1. Cargar todas las fuentes de Google Fonts
     loadAllFonts();
-    
-    // 2. Intentar cargar el proyecto guardado previamente
-    const loaded = useStore.getState().loadLocal();
-    if (loaded) {
-      console.log('✅ Proyecto restaurado desde el autoguardado local.');
-    } else {
-      console.log('🆕 Iniciando nuevo proyecto (no hay autoguardado).');
-    }
+
+    // 2. Intentar cargar el proyecto guardado previamente (async)
+    (async () => {
+      const loaded = await useStore.getState().loadLocal();
+      if (loaded) {
+        console.log('✅ Proyecto restaurado desde IndexedDB.');
+      } else {
+        console.log('🆕 Iniciando nuevo proyecto (sin autoguardado).');
+      }
+    })();
   }, []);
 
   // -------------------------------------------------------------
