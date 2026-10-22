@@ -7,6 +7,7 @@ import {
 import { BUILTIN_TEMPLATES, COVER_TEMPLATES } from '@/src/engine/templates';
 import { applyTemplate, assignPhotoToSlot, shufflePhotos, suggestLayouts } from '@/src/engine/layoutEngine';
 import { HistoryState, pushHistory, undo as undoH, redo as redoH } from '@/src/engine/history';
+import { saveProjectToDB, loadProjectFromDB } from '@/src/utils/db'; // ✅ NUEVO
 
 // ============================================================
 // TAMAÑOS PREDEFINIDOS
@@ -196,8 +197,9 @@ interface StoreState {
   toggleSlotSelection: (slotId: string) => void;
   clearSlotSelection: () => void;
 
-  saveLocal: () => void;
-  loadLocal: () => boolean;
+  // ✅ AHORA son async
+  saveLocal: () => Promise<void>;
+  loadLocal: () => Promise<boolean>;
 
   // ✅ Acciones de carpetas
   addFolder: (name?: string) => string;
@@ -992,43 +994,43 @@ export const useStore = create<StoreState>((set, get) => {
       ui: { ...s.ui, selectedSlotIds: [], selectedSlotId: null }
     })),
 
-    saveLocal: () => {
+    // ✅ AHORA saveLocal usa IndexedDB (async)
+    saveLocal: async () => {
       const s = get();
       const project = s.history.present;
       try {
-        localStorage.setItem('evr:autosave', JSON.stringify({
-          project,
-          savedAt: Date.now()
-        }));
+        await saveProjectToDB(project);
         set(st => ({ ui: { ...st.ui, autosaveAt: Date.now() } }));
       } catch (error) {
-        console.warn("No se pudo guardar automáticamente (posible límite de almacenamiento excedido):", error);
+        console.error('❌ Error al guardar en IndexedDB:', error);
       }
     },
 
-    loadLocal: () => {
-      const raw = localStorage.getItem('evr:autosave');
-      if (!raw) return false;
+    // ✅ AHORA loadLocal usa IndexedDB (async)
+    loadLocal: async () => {
       try {
-        const data = JSON.parse(raw);
-        if (!data.project) return false;
+        const data = await loadProjectFromDB();
+        if (!data || !data.project) return false;
 
         // ✅ Compatibilidad con proyectos antiguos que no tenían folders
         const project: Project = {
           ...data.project,
           folders: data.project.folders ?? [],
         };
-        
+
         set(s => ({
           history: {
             past: [],
             present: project,
             future: []
           },
-          ui: { ...s.ui, autosaveAt: Date.now() }
+          ui: { ...s.ui, autosaveAt: data.savedAt }
         }));
         return true;
-      } catch { return false; }
+      } catch (error) {
+        console.error('❌ Error al cargar desde IndexedDB:', error);
+        return false;
+      }
     }
   };
 });
