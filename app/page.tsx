@@ -12,6 +12,8 @@ import { ExportDialog } from '@/src/components/ExportDialog';
 import { NewProjectDialog } from '@/src/components/NewProjectDialog';
 import { GridViewModal } from '@/src/components/GridViewModal';
 import { GlobalLoader } from '@/src/components/GlobalLoader';
+// ✅ NUEVO: Importamos el componente de la herramienta de posición
+import { PositionTool } from '@/src/components/PositionTool';
 import { useStore } from '@/src/store/projectStore';
 import { loadAllFonts } from '@/src/engine/assets';
 
@@ -329,7 +331,10 @@ export default function Page() {
       <NewProjectDialog />
       <GridViewModal />
 
-      {/* ✅ NUEVO: Loader global (siempre al final para que quede encima de todo) */}
+      {/* ✅ NUEVO: Herramienta de posición flotante */}
+      <PositionTool />
+
+      {/* ✅ Loader global (siempre al final para que quede encima de todo) */}
       <GlobalLoader />
     </div>
   );

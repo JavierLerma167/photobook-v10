@@ -427,6 +427,9 @@ function PageInner({
 }) {
   const clearSlotSelection = useStore(s => s.clearSlotSelection);
 
+  // ✅ NUEVO: Suscripción a las guías inteligentes del store
+  const smartGuides = useStore(s => s.ui.smartGuides);
+
   const [isDragOverEmpty, setIsDragOverEmpty] = useState(false);
 
   // Estado del marquee (rectángulo de selección)
@@ -645,6 +648,35 @@ function PageInner({
           selected={selectedTextId === t.id}
         />
       ))}
+
+      {/* ✅ NUEVO: Guías inteligentes (líneas de alineación) */}
+      {smartGuides.map((g, i) =>
+        g.type === 'vertical' ? (
+          <div
+            key={`sg-v-${i}`}
+            className="absolute pointer-events-none bg-pink-500/80"
+            style={{
+              left: `${g.x}%`,
+              top: 0,
+              width: 1,
+              height: '100%',
+              zIndex: 100,
+            }}
+          />
+        ) : (
+          <div
+            key={`sg-h-${i}`}
+            className="absolute pointer-events-none bg-pink-500/80"
+            style={{
+              left: 0,
+              top: `${g.y}%`,
+              width: '100%',
+              height: 1,
+              zIndex: 100,
+            }}
+          />
+        )
+      )}
     </div>
   );
 }

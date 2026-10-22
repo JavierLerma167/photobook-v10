@@ -7,7 +7,7 @@ import {
 import { BUILTIN_TEMPLATES, COVER_TEMPLATES } from '@/src/engine/templates';
 import { applyTemplate, assignPhotoToSlot, shufflePhotos, suggestLayouts } from '@/src/engine/layoutEngine';
 import { HistoryState, pushHistory, undo as undoH, redo as redoH } from '@/src/engine/history';
-import { saveProjectToDB, loadProjectFromDB } from '@/src/utils/db'; // ✅ NUEVO
+import { saveProjectToDB, loadProjectFromDB } from '@/src/utils/db';
 
 // ============================================================
 // TAMAÑOS PREDEFINIDOS
@@ -68,7 +68,6 @@ export function createProject(name: string, size: AlbumSize): Project {
     ],
     photos: [],
     currentPageIndex: 0,
-    // ✅ NUEVO: Inicializamos las carpetas
     folders: [],
   };
 }
@@ -140,6 +139,10 @@ interface UIState {
   isLoading: boolean;
   /** Mensaje que se muestra debajo del spinner. */
   loadingMessage: string;
+
+  // ✅ NUEVO: Guías inteligentes (smart guides)
+  /** Líneas de alineación que se muestran mientras se arrastra un slot. */
+  smartGuides: { x: number; y: number; type: 'vertical' | 'horizontal' }[];
 }
 
 interface StoreState {
@@ -206,6 +209,9 @@ interface StoreState {
   renameFolder: (folderId: string, name: string) => void;
   deleteFolder: (folderId: string) => void;
   movePhotoToFolder: (photoIds: string[], folderId: string | null) => void;
+
+  // ✅ NUEVO: Acción para actualizar las guías inteligentes
+  setSmartGuides: (guides: UIState['smartGuides']) => void;
 }
 
 // ============================================================
@@ -236,9 +242,10 @@ export const useStore = create<StoreState>((set, get) => {
       autosaveAt: 0,
       gridViewOpen: false,
       slotClipboard: null,
-      // ✅ NUEVO: Inicialización del estado de carga
       isLoading: false,
       loadingMessage: '',
+      // ✅ NUEVO: Inicialización de las guías inteligentes
+      smartGuides: [],
     },
     templates: [...BUILTIN_TEMPLATES, ...COVER_TEMPLATES],
     profiles: DEFAULT_PROFILES,
@@ -256,7 +263,9 @@ export const useStore = create<StoreState>((set, get) => {
         zoom: 0.5,
         panX: 0,
         panY: 0,
-        gridViewOpen: false
+        gridViewOpen: false,
+        // ✅ NUEVO: Limpiar guías al crear un proyecto nuevo
+        smartGuides: [],
       }
     })),
 
@@ -1031,7 +1040,12 @@ export const useStore = create<StoreState>((set, get) => {
         console.error('❌ Error al cargar desde IndexedDB:', error);
         return false;
       }
-    }
+    },
+
+    // ✅ NUEVO: Acción para actualizar las guías inteligentes
+    setSmartGuides: (guides) => set(s => ({
+      ui: { ...s.ui, smartGuides: guides }
+    })),
   };
 });
 

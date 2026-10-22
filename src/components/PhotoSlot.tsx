@@ -41,6 +41,9 @@ export function SlotView({ slot, page, pageWidth, pageHeight, offsetX, viewWidth
   const pasteSlot = useStore(s => s.pasteSlot);
   const slotClipboard = useStore(s => s.ui.slotClipboard);
 
+  // ✅ NUEVO: Acción para actualizar las guías inteligentes
+  const setSmartGuides = useStore(s => s.setSmartGuides);
+
   const [dragOver, setDragOver] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuPos, setMenuPos] = useState({ x: 0, y: 0 });
@@ -200,6 +203,11 @@ export function SlotView({ slot, page, pageWidth, pageHeight, offsetX, viewWidth
 
   // -------------------------------------------------------------
   // startDrag: inicia el arrastre de N slots
+  //
+  // ✅ NUEVO: Integración de Guías Inteligentes.
+  // Al arrastrar UN solo slot, calculamos si sus bordes o centro
+  // coinciden con algún target (otros slots o centro de página).
+  // Si es así, mostramos la guía y "pegamos" el slot a esa posición.
   // -------------------------------------------------------------
   const startDrag = (initX: number, initY: number, ids: string[]) => {
     const isMultiDrag = ids.length > 1;
@@ -224,29 +232,60 @@ export function SlotView({ slot, page, pageWidth, pageHeight, offsetX, viewWidth
         startPositions.forEach(p => {
           state.updateSlot(p.id, { x: p.x + dxPct, y: p.y + dyPct });
         });
+        state.setSmartGuides([]); // Ocultar guías en multi-drag
         return;
       }
 
       const start = startPositions[0];
       let newX = start.x + dxPct;
       let newY = start.y + dyPct;
+      const guides: { x: number; y: number; type: 'vertical' | 'horizontal' }[] = [];
 
+      // --- Snapping en X ---
+      // Buscamos si el borde izquierdo, centro o derecho coinciden con algún target
       const snapLeft = snapValue(newX, xTargets);
       const snapCenterX = snapValue(newX + start.w / 2, xTargets) - start.w / 2;
       const snapRight = snapValue(newX + start.w, xTargets) - start.w;
-      newX = [snapLeft, snapCenterX, snapRight].reduce(
-        (best, c) => (Math.abs(c - newX) < Math.abs(best - newX) ? c : best),
-        newX,
+
+      const candidatesX = [
+        { value: snapLeft, guide: snapLeft },
+        { value: snapCenterX, guide: snapCenterX + start.w / 2 },
+        { value: snapRight, guide: snapRight + start.w },
+      ];
+
+      const bestX = candidatesX.reduce(
+        (best, c) => (Math.abs(c.value - newX) < Math.abs(best.value - newX) ? c : best),
+        { value: newX, guide: -1 }
       );
 
+      if (bestX.guide !== -1) {
+        newX = bestX.value;
+        guides.push({ x: bestX.guide, y: 0, type: 'vertical' });
+      }
+
+      // --- Snapping en Y ---
       const snapTop = snapValue(newY, yTargets);
       const snapCenterY = snapValue(newY + start.h / 2, yTargets) - start.h / 2;
       const snapBottom = snapValue(newY + start.h, yTargets) - start.h;
-      newY = [snapTop, snapCenterY, snapBottom].reduce(
-        (best, c) => (Math.abs(c - newY) < Math.abs(best - newY) ? c : best),
-        newY,
+
+      const candidatesY = [
+        { value: snapTop, guide: snapTop },
+        { value: snapCenterY, guide: snapCenterY + start.h / 2 },
+        { value: snapBottom, guide: snapBottom + start.h },
+      ];
+
+      const bestY = candidatesY.reduce(
+        (best, c) => (Math.abs(c.value - newY) < Math.abs(best.value - newY) ? c : best),
+        { value: newY, guide: -1 }
       );
 
+      if (bestY.guide !== -1) {
+        newY = bestY.value;
+        guides.push({ x: 0, y: bestY.guide, type: 'horizontal' });
+      }
+
+      // Actualizamos las guías visuales y el slot
+      state.setSmartGuides(guides);
       state.updateSlot(start.id, {
         x: Math.max(-20, Math.min(120 - start.w, newX)),
         y: Math.max(-20, Math.min(120 - start.h, newY)),
@@ -256,6 +295,8 @@ export function SlotView({ slot, page, pageWidth, pageHeight, offsetX, viewWidth
     const onUp = () => {
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
+      // ✅ NUEVO: Ocultar guías al soltar el ratón
+      useStore.getState().setSmartGuides([]);
     };
 
     window.addEventListener('mousemove', onMove);
@@ -466,6 +507,8 @@ export function SlotView({ slot, page, pageWidth, pageHeight, offsetX, viewWidth
     const onUp = () => {
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
+      // ✅ NUEVO: Ocultar guías al soltar (por si el resize las activó)
+      useStore.getState().setSmartGuides([]);
     };
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
