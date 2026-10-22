@@ -63,8 +63,9 @@ export function SlotView({ slot, page, pageWidth, pageHeight, offsetX, viewWidth
   //   - application/x-evr-photos → JSON array de IDs (grupo)
   //   - application/x-evr-photo  → un solo ID (individual)
   //
-  // Comportamiento: SIEMPRE crea slots NUEVOS a partir de este slot,
-  // sin reemplazar su foto. Los nuevos heredan el tamaño de este slot.
+  // ✅ CORRECCIÓN: 
+  //   - Si el slot está VACÍO → asigna la foto directamente.
+  //   - Si el slot YA TIENE FOTO → crea nuevos slots al lado.
   // -------------------------------------------------------------
   const handleDragOver = (e: React.DragEvent) => {
     if (
@@ -87,7 +88,12 @@ export function SlotView({ slot, page, pageWidth, pageHeight, offsetX, viewWidth
       try {
         const ids: string[] = JSON.parse(groupRaw);
         if (ids.length > 0) {
-          createSlotsFromSlot(page, slot, ids);
+          // ✅ Si el slot está vacío y solo se suelta 1 foto, asignarla directamente
+          if (!slot.photoId && ids.length === 1) {
+            assignPhoto(slot.id, ids[0]);
+          } else {
+            createSlotsFromSlot(page, slot, ids);
+          }
           return;
         }
       } catch {
@@ -98,7 +104,12 @@ export function SlotView({ slot, page, pageWidth, pageHeight, offsetX, viewWidth
     // 2) Individual
     const photoId = e.dataTransfer.getData('application/x-evr-photo');
     if (photoId) {
-      createSlotsFromSlot(page, slot, [photoId]);
+      // ✅ Si el slot está vacío, asignar directamente. Si no, crear un nuevo slot.
+      if (!slot.photoId) {
+        assignPhoto(slot.id, photoId);
+      } else {
+        createSlotsFromSlot(page, slot, [photoId]);
+      }
     }
   };
 
