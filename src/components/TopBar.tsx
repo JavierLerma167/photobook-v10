@@ -1,10 +1,12 @@
+// src/components/TopBar.tsx
 'use client';
 
 import React, { useRef } from 'react';
 import { useStore } from '@/src/store/projectStore';
 import {
   FilePlus, Save, Undo2, Redo2, LayoutTemplate, Wand2,
-  ShieldCheck, Download, Grid3x3, Square, PanelLeft, PanelRight
+  ShieldCheck, Download, Grid3x3, Square, PanelLeft, PanelRight,
+  Upload, FolderDown // ✅ NUEVOS ICONOS para JSON
 } from 'lucide-react';
 
 export function TopBar() {
@@ -24,9 +26,15 @@ export function TopBar() {
   const autoDesign = useStore(s => s.autoDesign);
   const photos = useStore(s => s.history.present.photos);
 
+  // ✅ NUEVO: Acciones y datos para Import/Export JSON
+  const setProject = useStore(s => s.setProject);
+  const project = useStore(s => s.history.present);
+
   const [editingName, setEditingName] = React.useState(false);
   const [nameDraft, setNameDraft] = React.useState(projectName);
   const inputRef = useRef<HTMLInputElement>(null);
+  // ✅ NUEVO: Ref para el input de archivo JSON
+  const jsonFileInputRef = useRef<HTMLInputElement>(null);
 
   // Fotos favoritas primero, si existen; si no, todas las fotos
   const favorites = photos.filter(p => p.favorite);
@@ -36,6 +44,50 @@ export function TopBar() {
   const handleAutoDesign = () => {
     if (!canAutoDesign) return;
     autoDesign(designPool.map(p => p.id));
+  };
+
+  // ✅ NUEVO: Exportar proyecto completo a un archivo .json
+  const handleExportJson = () => {
+    try {
+      const dataStr = JSON.stringify(project, null, 2);
+      const blob = new Blob([dataStr], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${project.name.replace(/\s+/g, '_')}_backup.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      alert('Error al exportar el proyecto.');
+      console.error(e);
+    }
+  };
+
+  // ✅ NUEVO: Importar un proyecto desde un archivo .json
+  const handleImportJson = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const json = JSON.parse(event.target?.result as string);
+
+        // Validación básica: debe tener páginas y fotos
+        if (json.pages && json.photos && json.name) {
+          setProject(json);
+          alert('Proyecto importado correctamente.');
+        } else {
+          alert('El archivo no tiene un formato válido de EVR Album.');
+        }
+      } catch (err) {
+        alert('Error al leer el archivo. Asegúrate de que sea un JSON válido.');
+        console.error(err);
+      }
+    };
+    reader.readAsText(file);
+    // Resetear el input para permitir subir el mismo archivo de nuevo
+    e.target.value = '';
   };
 
   return (
@@ -96,6 +148,30 @@ export function TopBar() {
       <button className="btn-ghost flex items-center gap-1.5 shrink-0" onClick={saveLocal}>
         <Save size={15} /> Guardar
       </button>
+
+      {/* ✅ NUEVOS BOTONES: Importar / Exportar JSON */}
+      <button
+        className="btn-ghost flex items-center gap-1.5 shrink-0"
+        onClick={handleExportJson}
+        title="Guardar copia de seguridad del proyecto en un archivo JSON"
+      >
+        <FolderDown size={15} /> Exportar JSON
+      </button>
+      <button
+        className="btn-ghost flex items-center gap-1.5 shrink-0"
+        onClick={() => jsonFileInputRef.current?.click()}
+        title="Cargar un proyecto desde un archivo JSON"
+      >
+        <Upload size={15} /> Importar JSON
+      </button>
+      <input
+        type="file"
+        ref={jsonFileInputRef}
+        className="hidden"
+        accept=".json"
+        onChange={handleImportJson}
+      />
+
       <button
         className="btn-ghost flex items-center gap-1.5 disabled:opacity-40 shrink-0"
         onClick={undo}

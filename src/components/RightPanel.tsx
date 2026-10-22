@@ -1,6 +1,7 @@
+// src/components/RightPanel.tsx
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useStore, useCurrentPage, useAlbumSize } from '@/src/store/projectStore';
 import { computeEffectiveDpi, QUALITY_COLOR, QUALITY_LABEL } from '@/src/engine/resolution';
 import { TEXTURES, FONT_OPTIONS, loadGoogleFont } from '@/src/engine/assets';
@@ -10,7 +11,7 @@ import {
   AlignStartHorizontal, AlignCenterHorizontal, AlignEndHorizontal,
   ArrowLeftToLine, ArrowRightToLine, ArrowUpToLine, ArrowDownToLine,
   MoveHorizontal, MoveVertical, Combine, SplitSquareHorizontal, SplitSquareVertical,
-  Square, LayoutGrid, Box, Upload
+  Square, LayoutGrid, Box, Upload, Paintbrush
 } from 'lucide-react';
 import { Photo, Slot, Page } from '@/src/types';
 
@@ -32,7 +33,10 @@ export function RightPanel() {
   const showSlotBorders = useStore(s => s.ui.showSlotBorders);
   const setUI = useStore(s => s.setUI);
 
-  // Estado local para las pestañas de fondo
+  // ✅ NUEVO: Estado para las pestañas principales (Diseño, Foto, Página)
+  const [activeTab, setActiveTab] = useState<'diseno' | 'foto' | 'pagina'>('diseno');
+
+  // Estado local para las pestañas de fondo dentro de la pestaña "Página"
   const [bgTab, setBgTab] = React.useState<'color' | 'textures' | 'custom'>('color');
   const customBgInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -82,561 +86,609 @@ export function RightPanel() {
   };
 
   return (
-    <div className="w-64 lg:w-72 bg-evr-panel border-l border-evr-border flex flex-col shrink-0 overflow-y-auto scroll-thin">
-      <div className="p-3 border-b border-evr-border">
-        <div className="text-xs font-semibold text-evr-muted uppercase tracking-wide mb-3">
-          Propiedades
-        </div>
+    <div className="w-64 lg:w-72 bg-evr-panel border-l border-evr-border flex flex-col shrink-0 overflow-hidden">
+      
+      {/* ✅ NUEVO: Barra de Pestañas Principales */}
+      <div className="flex border-b border-evr-border shrink-0 bg-evr-panel z-10">
+        <button
+          onClick={() => setActiveTab('diseno')}
+          className={`flex-1 py-2.5 text-xs font-medium flex items-center justify-center gap-1.5 transition-colors ${
+            activeTab === 'diseno'
+              ? 'bg-evr-hover text-evr-accent border-b-2 border-evr-accent'
+              : 'text-evr-muted hover:text-evr-text hover:bg-evr-hover/50'
+          }`}
+        >
+          <Box size={14} /> Diseño
+        </button>
+        <button
+          onClick={() => setActiveTab('foto')}
+          className={`flex-1 py-2.5 text-xs font-medium flex items-center justify-center gap-1.5 transition-colors ${
+            activeTab === 'foto'
+              ? 'bg-evr-hover text-evr-accent border-b-2 border-evr-accent'
+              : 'text-evr-muted hover:text-evr-text hover:bg-evr-hover/50'
+          }`}
+        >
+          <ImageIcon size={14} /> Foto
+        </button>
+        <button
+          onClick={() => setActiveTab('pagina')}
+          className={`flex-1 py-2.5 text-xs font-medium flex items-center justify-center gap-1.5 transition-colors ${
+            activeTab === 'pagina'
+              ? 'bg-evr-hover text-evr-accent border-b-2 border-evr-accent'
+              : 'text-evr-muted hover:text-evr-text hover:bg-evr-hover/50'
+          }`}
+        >
+          <Paintbrush size={14} /> Página
+        </button>
+      </div>
 
-        {slot && (
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="text-sm font-medium flex items-center gap-1.5">
-                <ImageIcon size={13} /> Slot
-              </div>
-              <button
-                className="btn-ghost p-1"
-                onClick={() => updateSlot(slot.id, { locked: !slot.locked })}
-                title={slot.locked ? 'Desbloquear' : 'Bloquear'}
-              >
-                {slot.locked ? <Lock size={13} /> : <Unlock size={13} />}
-              </button>
-            </div>
+      <div className="flex-1 overflow-y-auto scroll-thin">
 
-            <div className="grid grid-cols-2 gap-2">
-              <NumberField label="X %" value={slot.x} onChange={v => updateSlot(slot.id, { x: v })} />
-              <NumberField label="Y %" value={slot.y} onChange={v => updateSlot(slot.id, { y: v })} />
-              <NumberField label="W %" value={slot.w} onChange={v => updateSlot(slot.id, { w: v })} />
-              <NumberField label="H %" value={slot.h} onChange={v => updateSlot(slot.id, { h: v })} />
-            </div>
-
-            <SliderField label="Zoom" min={1} max={3} step={0.01} value={slot.zoom}
-              onChange={v => updateSlot(slot.id, { zoom: v })} />
-            <SliderField label="Offset X" min={-1} max={1} step={0.01} value={slot.offsetX}
-              onChange={v => updateSlot(slot.id, { offsetX: v })} />
-            <SliderField label="Offset Y" min={-1} max={1} step={0.01} value={slot.offsetY}
-              onChange={v => updateSlot(slot.id, { offsetY: v })} />
-            <SliderField label="Rotación" min={-180} max={180} step={1} value={slot.rotation}
-              onChange={v => updateSlot(slot.id, { rotation: v })} />
-
-            <div className="flex gap-1">
-              <button className="btn-outline flex-1 text-xs" onClick={() => updateSlot(slot.id, { rotation: (slot.rotation + 90) % 360 })}>
-                <RotateCw size={12} className="inline" /> 90°
-              </button>
-              <button className="btn-outline flex-1 text-xs" onClick={() => updateSlot(slot.id, { zoom: 1, offsetX: 0, offsetY: 0 })}>
-                <Maximize size={12} className="inline" /> Reset
-              </button>
-            </div>
-
-            {/* Ajuste de foto dentro del slot */}
-            <div>
-              <div className="text-[10px] text-evr-muted uppercase tracking-wide mb-1.5">
-                Ajuste de la foto
-              </div>
-              <div className="grid grid-cols-3 gap-1">
-                {(['cover', 'contain', 'fill'] as const).map(fit => (
+        {/* ============================================================ */}
+        {/* PESTAÑA: DISEÑO (Slots, Textos, Alineación) */}
+        {/* ============================================================ */}
+        {activeTab === 'diseno' && (
+          <div className="p-3 space-y-4">
+            {slot && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between border-b border-evr-border pb-2">
+                  <div className="text-sm font-medium flex items-center gap-1.5">
+                    <ImageIcon size={13} /> Slot
+                  </div>
                   <button
-                    key={fit}
-                    className={`btn-outline text-xs py-1.5 ${
-                      slot.fit === fit ? 'bg-evr-hover border-evr-accent' : ''
-                    }`}
-                    onClick={() => updateSlot(slot.id, { fit })}
-                    title={
-                      fit === 'cover' ? 'Rellenar el slot, recorta si hace falta' :
-                      fit === 'contain' ? 'Ajustar sin recortar (deja márgenes)' :
-                      'Estirar para llenar (puede deformar)'
-                    }
+                    className="btn-ghost p-1"
+                    onClick={() => updateSlot(slot.id, { locked: !slot.locked })}
+                    title={slot.locked ? 'Desbloquear' : 'Bloquear'}
                   >
-                    {fit === 'cover' ? 'Cover' : fit === 'contain' ? 'Contain' : 'Fill'}
+                    {slot.locked ? <Lock size={13} /> : <Unlock size={13} />}
                   </button>
-                ))}
-              </div>
-              <div className="text-[10px] text-evr-muted mt-1 leading-relaxed">
-                {slot.fit === 'cover'
-                  ? 'La foto llena el slot y se recorta. Ideal para ocupar todo el espacio.'
-                  : slot.fit === 'contain'
-                  ? 'La foto se ve completa dentro del slot, con márgenes. Sin recortes.'
-                  : 'La foto se estira para llenar el slot. Puede deformar.'}
-              </div>
-            </div>
-
-            {photo && <ResolutionBadge photo={photo} slot={slot} />}
-
-            {/* ✅ NUEVO: Sección de bordes del marco */}
-            <div className="border-t border-evr-border pt-3 mt-3">
-              <div className="text-[10px] text-evr-muted uppercase tracking-wide mb-1.5">
-                Borde del marco
-              </div>
-              <div className="grid grid-cols-2 gap-2 mb-2">
-                <NumberField
-                  label="Grosor (px)"
-                  value={slot.borderWidth || 0}
-                  onChange={v => updateSlot(slot.id, { borderWidth: v })}
-                />
-                <NumberField
-                  label="Radio (px)"
-                  value={slot.borderRadius || 0}
-                  onChange={v => updateSlot(slot.id, { borderRadius: v })}
-                />
-              </div>
-              <div className="flex gap-2 mb-2">
-                <select
-                  className="input text-xs flex-1"
-                  value={slot.borderStyle || 'solid'}
-                  onChange={e => updateSlot(slot.id, { borderStyle: e.target.value as any })}
-                >
-                  <option value="solid">Sólido</option>
-                  <option value="dashed">Discontinuo</option>
-                  <option value="dotted">Punteado</option>
-                </select>
-                <input
-                  type="color"
-                  className="w-8 h-8 rounded cursor-pointer border border-evr-border"
-                  value={slot.borderColor || '#000000'}
-                  onChange={e => updateSlot(slot.id, { borderColor: e.target.value })}
-                />
-              </div>
-              <button
-                className="btn-outline w-full text-xs"
-                onClick={() => updateSlot(slot.id, {
-                  borderWidth: 0,
-                  borderColor: 'transparent',
-                  borderStyle: 'solid',
-                  borderRadius: 0
-                })}
-                title="Quitar el borde personalizado"
-              >
-                Quitar borde
-              </button>
-            </div>
-
-            <MergeSplitTools slot={slot} />
-            <AlignTools slot={slot} page={page} />
-          </div>
-        )}
-
-        {text && (
-          <div className="space-y-3">
-            <div className="text-sm font-medium flex items-center gap-1.5">
-              <Type size={13} /> Texto
-            </div>
-            <textarea
-              className="input w-full text-sm resize-none"
-              rows={2}
-              value={text.text}
-              onChange={e => updateText(text.id, { text: e.target.value })}
-            />
-
-            {/* Selector de fuente */}
-            <div>
-              <label className="text-[10px] text-evr-muted block mb-1">Fuente</label>
-              <select
-                className="input w-full text-xs"
-                value={text.fontFamily}
-                onChange={e => {
-                  const family = e.target.value;
-                  const font = FONT_OPTIONS.find(f => f.family === family);
-                  if (font) loadGoogleFont(font.family, font.weights);
-                  updateText(text.id, { fontFamily: family });
-                }}
-              >
-                {FONT_OPTIONS.map(font => (
-                  <option key={font.family} value={font.family}>
-                    {font.family} ({font.category})
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2">
-              <NumberField label="X %" value={text.x} onChange={v => updateText(text.id, { x: v })} />
-              <NumberField label="Y %" value={text.y} onChange={v => updateText(text.id, { y: v })} />
-              <NumberField label="Size pt" value={text.fontSize} onChange={v => updateText(text.id, { fontSize: v })} />
-              <NumberField label="Peso" value={text.fontWeight} onChange={v => updateText(text.id, { fontWeight: v })} />
-              <NumberField label="Tracking" value={text.tracking} onChange={v => updateText(text.id, { tracking: v })} />
-              <NumberField label="Interlineado" value={text.lineHeight} step={0.05} onChange={v => updateText(text.id, { lineHeight: v })} />
-            </div>
-            <div className="grid grid-cols-3 gap-1">
-              {(['left', 'center', 'right'] as const).map(a => (
-                <button
-                  key={a}
-                  className={`btn-outline text-xs ${text.align === a ? 'bg-evr-hover' : ''}`}
-                  onClick={() => updateText(text.id, { align: a })}
-                >
-                  {a === 'left' ? 'Izq' : a === 'center' ? 'Centro' : 'Der'}
-                </button>
-              ))}
-            </div>
-            <div className="flex items-center gap-2">
-              <label className="text-xs text-evr-muted">Color</label>
-              <input type="color" value={text.color} onChange={e => updateText(text.id, { color: e.target.value })} />
-            </div>
-            <button className="btn-outline w-full text-xs text-red-400" onClick={() => deleteText(text.id)}>
-              <Trash2 size={12} className="inline" /> Eliminar
-            </button>
-          </div>
-        )}
-
-        {!slot && !text && (
-          <div className="text-xs text-evr-muted leading-relaxed">
-            Selecciona un slot o un texto para editar sus propiedades.<br /><br />
-            <span className="text-evr-text">Tips:</span><br />
-            • Doble clic en un slot con foto → la vacía<br />
-            • Alt + arrastrar dentro de un slot → mueve la foto<br />
-            • Espacio + arrastrar → mover canvas<br />
-            • Ctrl + rueda → zoom<br />
-            • Flechas → mover slot seleccionado<br />
-            • Shift+clic → multi-selección
-          </div>
-        )}
-      </div>
-
-      {/* ----------------------------------------------------------------
-          Vista
-          ---------------------------------------------------------------- */}
-      <div className="p-3 border-b border-evr-border">
-        <div className="text-xs font-semibold text-evr-muted uppercase tracking-wide mb-2">Vista</div>
-
-        <label className="flex items-center gap-2 cursor-pointer select-none">
-          <input
-            type="checkbox"
-            className="accent-evr-accent"
-            checked={showSlotBorders}
-            onChange={e => setUI({ showSlotBorders: e.target.checked })}
-          />
-          <Box size={12} className="text-evr-muted" />
-          <span className="text-xs">Mostrar bordes de los slots</span>
-        </label>
-
-        <div className="text-[10px] text-evr-muted mt-1.5 leading-relaxed">
-          Desactívalo para una vista limpia sin marcos. El slot seleccionado siempre mostrará su contorno.
-        </div>
-      </div>
-
-      {/* ----------------------------------------------------------------
-          Diseño libre
-          ---------------------------------------------------------------- */}
-      <div className="p-3 border-b border-evr-border">
-        <div className="text-xs font-semibold text-evr-muted uppercase tracking-wide mb-2">
-          Diseño libre
-        </div>
-        <div className="grid grid-cols-2 gap-1">
-          <button
-            className="btn-outline text-xs flex items-center justify-center gap-1"
-            onClick={() => addSlot()}
-            title="Añadir un slot vacío en el centro de la página"
-          >
-            <Square size={12} />
-            + Slot libre
-          </button>
-          <button
-            className="btn-outline text-xs flex items-center justify-center gap-1"
-            onClick={() => addSlot(undefined, { x: 0, y: 0, w: 100, h: 100, fit: 'contain' })}
-            title="Añadir un slot que ocupa toda la página"
-          >
-            <LayoutGrid size={12} />
-            + Full page
-          </button>
-        </div>
-        <div className="text-[10px] text-evr-muted mt-1.5 leading-relaxed">
-          Crea contenedores vacíos y arrastra fotos dentro. Muévelos y redimensiónalos libremente.
-        </div>
-      </div>
-
-      <div className="p-3 border-b border-evr-border">
-        <div className="text-xs font-semibold text-evr-muted uppercase tracking-wide mb-2">Añadir texto</div>
-        <div className="grid grid-cols-2 gap-1">
-          <button className="btn-outline text-xs" onClick={() => addText({ text: 'Título', fontSize: 36, fontWeight: 700 })}>
-            <Type size={12} className="inline" /> Título
-          </button>
-          <button className="btn-outline text-xs" onClick={() => addText({ text: 'Subtítulo', fontSize: 18, fontWeight: 500 })}>
-            <Type size={12} className="inline" /> Subtítulo
-          </button>
-          <button className="btn-outline text-xs" onClick={() => addText({ text: new Date().toLocaleDateString(), fontSize: 12, fontWeight: 400 })}>
-            <Type size={12} className="inline" /> Fecha
-          </button>
-          <button className="btn-outline text-xs" onClick={() => addText({ text: 'Texto libre', fontSize: 14 })}>
-            <Type size={12} className="inline" /> Texto
-          </button>
-        </div>
-      </div>
-
-      {/* ----------------------------------------------------------------
-          Fondo de página
-          ---------------------------------------------------------------- */}
-      <div className="p-3">
-        <div className="text-xs font-semibold text-evr-muted uppercase tracking-wide mb-2">
-          Fondo de página
-        </div>
-
-        {/* Pestañas: Color / Texturas / Imagen */}
-        <div className="grid grid-cols-3 gap-1 mb-3">
-          <button
-            className={`btn-outline text-xs py-1 ${bgTab === 'color' ? 'bg-evr-hover border-evr-accent' : ''}`}
-            onClick={() => setBgTab('color')}
-          >
-            Color
-          </button>
-          <button
-            className={`btn-outline text-xs py-1 ${bgTab === 'textures' ? 'bg-evr-hover border-evr-accent' : ''}`}
-            onClick={() => setBgTab('textures')}
-          >
-            Texturas
-          </button>
-          <button
-            className={`btn-outline text-xs py-1 ${bgTab === 'custom' ? 'bg-evr-hover border-evr-accent' : ''}`}
-            onClick={() => setBgTab('custom')}
-          >
-            Imagen
-          </button>
-        </div>
-
-        {/* -------- Pestaña: Color -------- */}
-        {bgTab === 'color' && (
-          <>
-            <div className="grid grid-cols-6 gap-1.5 mb-2">
-              {[
-                '#ffffff', '#faf7f2', '#f5f1ea', '#e8e4dc', '#d4cfc4', '#c9b8a0',
-                '#9ca3af', '#4b5563', '#1f2937', '#0f1115', '#000000', '#0a0c10',
-                '#fef3c7', '#dbeafe', '#fce7f3', '#dcfce7', '#ede9fe', '#ffedd5',
-                '#78350f', '#7c2d12', '#831843', '#4c1d95', '#1e3a5f', '#064e3b',
-              ].map(c => (
-                <button
-                  key={c}
-                  className={`w-full aspect-square rounded border-2 transition-all ${
-                    page.background === c && !page.backgroundImage
-                      ? 'border-evr-accent scale-110 shadow-lg'
-                      : 'border-evr-border hover:border-evr-muted'
-                  }`}
-                  style={{ background: c }}
-                  onClick={() => setBackground(c, null)}
-                  title={c}
-                />
-              ))}
-            </div>
-
-            <div className="flex items-center gap-2">
-              <div className="flex-1 flex items-center gap-2">
-                <label className="text-[10px] text-evr-muted whitespace-nowrap">Personalizado</label>
-                <input
-                  type="color"
-                  value={page.background || '#ffffff'}
-                  onChange={e => setBackground(e.target.value, null)}
-                  className="flex-1 h-7 cursor-pointer rounded border border-evr-border bg-transparent"
-                />
-              </div>
-              <button
-                className="btn-outline text-[10px] px-2 py-1"
-                onClick={() => setBackground('#ffffff', null)}
-                title="Restablecer a blanco"
-              >
-                Reset
-              </button>
-            </div>
-          </>
-        )}
-
-        {/* -------- Pestaña: Texturas -------- */}
-        {bgTab === 'textures' && (
-          <>
-            <div className="grid grid-cols-3 gap-1.5 mb-2 max-h-64 overflow-y-auto scroll-thin">
-              {TEXTURES.map(tex => {
-                const isActive = page.backgroundImage === tex.url;
-                return (
-                  <button
-                    key={tex.id}
-                    className={`relative aspect-square rounded overflow-hidden border-2 transition-all ${
-                      isActive ? 'border-evr-accent scale-105 shadow-lg' : 'border-evr-border hover:border-evr-muted'
-                    }`}
-                    onClick={() => setBackgroundImage(tex.url)}
-                    title={tex.name}
-                  >
-                    <img src={tex.preview} alt={tex.name} className="w-full h-full object-cover" />
-                    <div className="absolute bottom-0 left-0 right-0 bg-black/70 text-white text-[8px] py-0.5 text-center truncate px-0.5">
-                      {tex.name}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-
-            {page.backgroundImage && (
-              <button
-                className="btn-outline w-full text-xs mb-2"
-                onClick={() => setBackgroundImage(null)}
-              >
-                Quitar textura
-              </button>
-            )}
-          </>
-        )}
-
-        {/* -------- Pestaña: Imagen personalizada -------- */}
-        {bgTab === 'custom' && (
-          <>
-            <input
-              ref={customBgInputRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={async e => {
-                const file = e.target.files?.[0];
-                if (!file) return;
-                const reader = new FileReader();
-                reader.onload = () => {
-                  if (typeof reader.result === 'string') {
-                    setBackgroundImage(reader.result);
-                  }
-                };
-                reader.readAsDataURL(file);
-                e.target.value = '';
-              }}
-            />
-            <button
-              className="btn-outline w-full text-xs mb-2 flex items-center justify-center gap-1"
-              onClick={() => customBgInputRef.current?.click()}
-            >
-              <Upload size={12} /> Subir imagen de fondo
-            </button>
-
-            {page.backgroundImage && !TEXTURES.some(t => t.url === page.backgroundImage) && (
-              <>
-                <div className="aspect-[1.4/1] rounded overflow-hidden border border-evr-border mb-2">
-                  <img src={page.backgroundImage} alt="Fondo personalizado" className="w-full h-full object-cover" />
                 </div>
-                <button
-                  className="btn-outline w-full text-xs mb-2"
-                  onClick={() => setBackgroundImage(null)}
-                >
-                  Quitar imagen
-                </button>
-              </>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <NumberField label="X %" value={slot.x} onChange={v => updateSlot(slot.id, { x: v })} />
+                  <NumberField label="Y %" value={slot.y} onChange={v => updateSlot(slot.id, { y: v })} />
+                  <NumberField label="W %" value={slot.w} onChange={v => updateSlot(slot.id, { w: v })} />
+                  <NumberField label="H %" value={slot.h} onChange={v => updateSlot(slot.id, { h: v })} />
+                </div>
+
+                {/* ✅ Sección de bordes del marco */}
+                <div className="border-t border-evr-border pt-3">
+                  <div className="text-[10px] text-evr-muted uppercase tracking-wide mb-1.5">
+                    Borde del marco
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 mb-2">
+                    <NumberField
+                      label="Grosor (px)"
+                      value={slot.borderWidth || 0}
+                      onChange={v => updateSlot(slot.id, { borderWidth: v })}
+                    />
+                    <NumberField
+                      label="Radio (px)"
+                      value={slot.borderRadius || 0}
+                      onChange={v => updateSlot(slot.id, { borderRadius: v })}
+                    />
+                  </div>
+                  <div className="flex gap-2 mb-2">
+                    <select
+                      className="input text-xs flex-1"
+                      value={slot.borderStyle || 'solid'}
+                      onChange={e => updateSlot(slot.id, { borderStyle: e.target.value as any })}
+                    >
+                      <option value="solid">Sólido</option>
+                      <option value="dashed">Discontinuo</option>
+                      <option value="dotted">Punteado</option>
+                    </select>
+                    <input
+                      type="color"
+                      className="w-8 h-8 rounded cursor-pointer border border-evr-border"
+                      value={slot.borderColor || '#000000'}
+                      onChange={e => updateSlot(slot.id, { borderColor: e.target.value })}
+                    />
+                  </div>
+                  <button
+                    className="btn-outline w-full text-xs"
+                    onClick={() => updateSlot(slot.id, {
+                      borderWidth: 0,
+                      borderColor: 'transparent',
+                      borderStyle: 'solid',
+                      borderRadius: 0
+                    })}
+                    title="Quitar el borde personalizado"
+                  >
+                    Quitar borde
+                  </button>
+                </div>
+
+                <MergeSplitTools slot={slot} />
+                <AlignTools slot={slot} page={page} />
+              </div>
             )}
-          </>
+
+            {text && (
+              <div className="space-y-3">
+                <div className="text-sm font-medium flex items-center gap-1.5 border-b border-evr-border pb-2">
+                  <Type size={13} /> Texto
+                </div>
+                <textarea
+                  className="input w-full text-sm resize-none"
+                  rows={2}
+                  value={text.text}
+                  onChange={e => updateText(text.id, { text: e.target.value })}
+                />
+
+                <div>
+                  <label className="text-[10px] text-evr-muted block mb-1">Fuente</label>
+                  <select
+                    className="input w-full text-xs"
+                    value={text.fontFamily}
+                    onChange={e => {
+                      const family = e.target.value;
+                      const font = FONT_OPTIONS.find(f => f.family === family);
+                      if (font) loadGoogleFont(font.family, font.weights);
+                      updateText(text.id, { fontFamily: family });
+                    }}
+                  >
+                    {FONT_OPTIONS.map(font => (
+                      <option key={font.family} value={font.family}>
+                        {font.family} ({font.category})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <NumberField label="X %" value={text.x} onChange={v => updateText(text.id, { x: v })} />
+                  <NumberField label="Y %" value={text.y} onChange={v => updateText(text.id, { y: v })} />
+                  <NumberField label="Size pt" value={text.fontSize} onChange={v => updateText(text.id, { fontSize: v })} />
+                  <NumberField label="Peso" value={text.fontWeight} onChange={v => updateText(text.id, { fontWeight: v })} />
+                  <NumberField label="Tracking" value={text.tracking} onChange={v => updateText(text.id, { tracking: v })} />
+                  <NumberField label="Interlineado" value={text.lineHeight} step={0.05} onChange={v => updateText(text.id, { lineHeight: v })} />
+                </div>
+                <div className="grid grid-cols-3 gap-1">
+                  {(['left', 'center', 'right'] as const).map(a => (
+                    <button
+                      key={a}
+                      className={`btn-outline text-xs ${text.align === a ? 'bg-evr-hover' : ''}`}
+                      onClick={() => updateText(text.id, { align: a })}
+                    >
+                      {a === 'left' ? 'Izq' : a === 'center' ? 'Centro' : 'Der'}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-xs text-evr-muted">Color</label>
+                  <input type="color" value={text.color} onChange={e => updateText(text.id, { color: e.target.value })} />
+                </div>
+                <button className="btn-outline w-full text-xs text-red-400" onClick={() => deleteText(text.id)}>
+                  <Trash2 size={12} className="inline" /> Eliminar
+                </button>
+              </div>
+            )}
+
+            {!slot && !text && (
+              <div className="space-y-4">
+                <div className="text-xs text-evr-muted leading-relaxed bg-evr-bg border border-evr-border rounded p-3">
+                  Selecciona un slot o un texto para editar sus propiedades.<br /><br />
+                  <span className="text-evr-text font-medium">Tips:</span><br />
+                  • Doble clic en un slot con foto → la vacía<br />
+                  • Alt + arrastrar dentro de un slot → mueve la foto<br />
+                  • Espacio + arrastrar → mover canvas<br />
+                  • Ctrl + rueda → zoom<br />
+                  • Flechas → mover slot seleccionado<br />
+                  • Shift+clic → multi-selección
+                </div>
+
+                <div className="border-t border-evr-border pt-3">
+                  <div className="text-[10px] text-evr-muted uppercase tracking-wide mb-2">
+                    Diseño libre
+                  </div>
+                  <div className="grid grid-cols-2 gap-1 mb-3">
+                    <button
+                      className="btn-outline text-xs flex items-center justify-center gap-1"
+                      onClick={() => addSlot()}
+                      title="Añadir un slot vacío en el centro de la página"
+                    >
+                      <Square size={12} />
+                      + Slot
+                    </button>
+                    <button
+                      className="btn-outline text-xs flex items-center justify-center gap-1"
+                      onClick={() => addSlot(undefined, { x: 0, y: 0, w: 100, h: 100, fit: 'contain' })}
+                      title="Añadir un slot que ocupa toda la página"
+                    >
+                      <LayoutGrid size={12} />
+                      + Full
+                    </button>
+                  </div>
+
+                  <div className="text-[10px] text-evr-muted uppercase tracking-wide mb-2">
+                    Añadir texto
+                  </div>
+                  <div className="grid grid-cols-2 gap-1">
+                    <button className="btn-outline text-xs" onClick={() => addText({ text: 'Título', fontSize: 36, fontWeight: 700 })}>
+                      <Type size={12} className="inline" /> Título
+                    </button>
+                    <button className="btn-outline text-xs" onClick={() => addText({ text: 'Subtítulo', fontSize: 18, fontWeight: 500 })}>
+                      <Type size={12} className="inline" /> Subtítulo
+                    </button>
+                    <button className="btn-outline text-xs" onClick={() => addText({ text: new Date().toLocaleDateString(), fontSize: 12, fontWeight: 400 })}>
+                      <Type size={12} className="inline" /> Fecha
+                    </button>
+                    <button className="btn-outline text-xs" onClick={() => addText({ text: 'Texto libre', fontSize: 14 })}>
+                      <Type size={12} className="inline" /> Texto
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
         )}
 
-        {/* -------- Controles de la imagen de fondo (si hay) -------- */}
-        {page.backgroundImage && (
-          <div className="space-y-2 mt-3 pt-3 border-t border-evr-border">
-            <div>
-              <div className="text-[10px] text-evr-muted uppercase tracking-wide mb-1">
-                Ajuste de la imagen
-              </div>
-              <div className="grid grid-cols-3 gap-1">
-                {(['cover', 'contain', 'repeat'] as const).map(fit => (
-                  <button
-                    key={fit}
-                    className={`btn-outline text-xs py-1 ${
-                      (page.backgroundImageFit || 'cover') === fit
-                        ? 'bg-evr-hover border-evr-accent'
-                        : ''
-                    }`}
-                    onClick={() => setBackgroundImageFit(fit)}
-                  >
-                    {fit === 'cover' ? 'Cover' : fit === 'contain' ? 'Contain' : 'Repeat'}
+        {/* ============================================================ */}
+        {/* PESTAÑA: FOTO (Ajustes de la imagen) */}
+        {/* ============================================================ */}
+        {activeTab === 'foto' && (
+          <div className="p-3 space-y-4">
+            {slot ? (
+              <>
+                <div className="text-sm font-medium flex items-center gap-1.5 border-b border-evr-border pb-2">
+                  <ImageIcon size={13} /> Ajustes de Imagen
+                </div>
+
+                <div>
+                  <div className="text-[10px] text-evr-muted uppercase tracking-wide mb-1.5">
+                    Ajuste (Fit)
+                  </div>
+                  <div className="grid grid-cols-3 gap-1">
+                    {(['cover', 'contain', 'fill'] as const).map(fit => (
+                      <button
+                        key={fit}
+                        className={`btn-outline text-xs py-1.5 ${
+                          slot.fit === fit ? 'bg-evr-hover border-evr-accent' : ''
+                        }`}
+                        onClick={() => updateSlot(slot.id, { fit })}
+                        title={
+                          fit === 'cover' ? 'Rellenar el slot, recorta si hace falta' :
+                          fit === 'contain' ? 'Ajustar sin recortar (deja márgenes)' :
+                          'Estirar para llenar (puede deformar)'
+                        }
+                      >
+                        {fit === 'cover' ? 'Cover' : fit === 'contain' ? 'Contain' : 'Fill'}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="text-[10px] text-evr-muted mt-1.5 leading-relaxed">
+                    {slot.fit === 'cover'
+                      ? 'La foto llena el slot y se recorta. Ideal para ocupar todo el espacio.'
+                      : slot.fit === 'contain'
+                      ? 'La foto se ve completa dentro del slot, con márgenes. Sin recortes.'
+                      : 'La foto se estira para llenar el slot. Puede deformar.'}
+                  </div>
+                </div>
+
+                <div className="space-y-3 border-t border-evr-border pt-3">
+                  <SliderField label="Zoom" min={1} max={3} step={0.01} value={slot.zoom}
+                    onChange={v => updateSlot(slot.id, { zoom: v })} />
+                  <SliderField label="Offset X" min={-1} max={1} step={0.01} value={slot.offsetX}
+                    onChange={v => updateSlot(slot.id, { offsetX: v })} />
+                  <SliderField label="Offset Y" min={-1} max={1} step={0.01} value={slot.offsetY}
+                    onChange={v => updateSlot(slot.id, { offsetY: v })} />
+                  <SliderField label="Rotación" min={-180} max={180} step={1} value={slot.rotation}
+                    onChange={v => updateSlot(slot.id, { rotation: v })} />
+                </div>
+
+                <div className="flex gap-1 border-t border-evr-border pt-3">
+                  <button className="btn-outline flex-1 text-xs" onClick={() => updateSlot(slot.id, { rotation: (slot.rotation + 90) % 360 })}>
+                    <RotateCw size={12} className="inline" /> 90°
                   </button>
-                ))}
+                  <button className="btn-outline flex-1 text-xs" onClick={() => updateSlot(slot.id, { zoom: 1, offsetX: 0, offsetY: 0 })}>
+                    <Maximize size={12} className="inline" /> Reset
+                  </button>
+                </div>
+
+                {photo && <ResolutionBadge photo={photo} slot={slot} />}
+              </>
+            ) : (
+              <div className="text-xs text-evr-muted text-center py-8 leading-relaxed">
+                Selecciona un slot con foto para ajustar su contenido (zoom, encuadre, rotación).
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ============================================================ */}
+        {/* PESTAÑA: PÁGINA (Fondo, Textura, Vista) */}
+        {/* ============================================================ */}
+        {activeTab === 'pagina' && (
+          <div className="p-3 space-y-4">
+            <div>
+              <div className="text-sm font-medium flex items-center gap-1.5 border-b border-evr-border pb-2 mb-3">
+                <Paintbrush size={13} /> Fondo de Página
+              </div>
+
+              <div className="grid grid-cols-3 gap-1 mb-3">
+                <button
+                  className={`btn-outline text-xs py-1 ${bgTab === 'color' ? 'bg-evr-hover border-evr-accent' : ''}`}
+                  onClick={() => setBgTab('color')}
+                >
+                  Color
+                </button>
+                <button
+                  className={`btn-outline text-xs py-1 ${bgTab === 'textures' ? 'bg-evr-hover border-evr-accent' : ''}`}
+                  onClick={() => setBgTab('textures')}
+                >
+                  Texturas
+                </button>
+                <button
+                  className={`btn-outline text-xs py-1 ${bgTab === 'custom' ? 'bg-evr-hover border-evr-accent' : ''}`}
+                  onClick={() => setBgTab('custom')}
+                >
+                  Imagen
+                </button>
+              </div>
+
+              {bgTab === 'color' && (
+                <>
+                  <div className="grid grid-cols-6 gap-1.5 mb-2">
+                    {[
+                      '#ffffff', '#faf7f2', '#f5f1ea', '#e8e4dc', '#d4cfc4', '#c9b8a0',
+                      '#9ca3af', '#4b5563', '#1f2937', '#0f1115', '#000000', '#0a0c10',
+                      '#fef3c7', '#dbeafe', '#fce7f3', '#dcfce7', '#ede9fe', '#ffedd5',
+                      '#78350f', '#7c2d12', '#831843', '#4c1d95', '#1e3a5f', '#064e3b',
+                    ].map(c => (
+                      <button
+                        key={c}
+                        className={`w-full aspect-square rounded border-2 transition-all ${
+                          page.background === c && !page.backgroundImage
+                            ? 'border-evr-accent scale-110 shadow-lg'
+                            : 'border-evr-border hover:border-evr-muted'
+                        }`}
+                        style={{ background: c }}
+                        onClick={() => setBackground(c, null)}
+                        title={c}
+                      />
+                    ))}
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 flex items-center gap-2">
+                      <label className="text-[10px] text-evr-muted whitespace-nowrap">Personalizado</label>
+                      <input
+                        type="color"
+                        value={page.background || '#ffffff'}
+                        onChange={e => setBackground(e.target.value, null)}
+                        className="flex-1 h-7 cursor-pointer rounded border border-evr-border bg-transparent"
+                      />
+                    </div>
+                    <button
+                      className="btn-outline text-[10px] px-2 py-1"
+                      onClick={() => setBackground('#ffffff', null)}
+                      title="Restablecer a blanco"
+                    >
+                      Reset
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {bgTab === 'textures' && (
+                <>
+                  <div className="grid grid-cols-3 gap-1.5 mb-2 max-h-64 overflow-y-auto scroll-thin">
+                    {TEXTURES.map(tex => {
+                      const isActive = page.backgroundImage === tex.url;
+                      return (
+                        <button
+                          key={tex.id}
+                          className={`relative aspect-square rounded overflow-hidden border-2 transition-all ${
+                            isActive ? 'border-evr-accent scale-105 shadow-lg' : 'border-evr-border hover:border-evr-muted'
+                          }`}
+                          onClick={() => setBackgroundImage(tex.url)}
+                          title={tex.name}
+                        >
+                          <img src={tex.preview} alt={tex.name} className="w-full h-full object-cover" />
+                          <div className="absolute bottom-0 left-0 right-0 bg-black/70 text-white text-[8px] py-0.5 text-center truncate px-0.5">
+                            {tex.name}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {page.backgroundImage && (
+                    <button
+                      className="btn-outline w-full text-xs mb-2"
+                      onClick={() => setBackgroundImage(null)}
+                    >
+                      Quitar textura
+                    </button>
+                  )}
+                </>
+              )}
+
+              {bgTab === 'custom' && (
+                <>
+                  <input
+                    ref={customBgInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={async e => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      const reader = new FileReader();
+                      reader.onload = () => {
+                        if (typeof reader.result === 'string') {
+                          setBackgroundImage(reader.result);
+                        }
+                      };
+                      reader.readAsDataURL(file);
+                      e.target.value = '';
+                    }}
+                  />
+                  <button
+                    className="btn-outline w-full text-xs mb-2 flex items-center justify-center gap-1"
+                    onClick={() => customBgInputRef.current?.click()}
+                  >
+                    <Upload size={12} /> Subir imagen de fondo
+                  </button>
+                  {page.backgroundImage && !TEXTURES.some(t => t.url === page.backgroundImage) && (
+                    <>
+                      <div className="aspect-[1.4/1] rounded overflow-hidden border border-evr-border mb-2">
+                        <img src={page.backgroundImage} alt="Fondo personalizado" className="w-full h-full object-cover" />
+                      </div>
+                      <button
+                        className="btn-outline w-full text-xs mb-2"
+                        onClick={() => setBackgroundImage(null)}
+                      >
+                        Quitar imagen
+                      </button>
+                    </>
+                  )}
+                </>
+              )}
+
+              {page.backgroundImage && (
+                <div className="space-y-2 mt-3 pt-3 border-t border-evr-border">
+                  <div>
+                    <div className="text-[10px] text-evr-muted uppercase tracking-wide mb-1">
+                      Ajuste de la imagen
+                    </div>
+                    <div className="grid grid-cols-3 gap-1">
+                      {(['cover', 'contain', 'repeat'] as const).map(fit => (
+                        <button
+                          key={fit}
+                          className={`btn-outline text-xs py-1 ${
+                            (page.backgroundImageFit || 'cover') === fit
+                              ? 'bg-evr-hover border-evr-accent'
+                              : ''
+                          }`}
+                          onClick={() => setBackgroundImageFit(fit)}
+                        >
+                          {fit === 'cover' ? 'Cover' : fit === 'contain' ? 'Contain' : 'Repeat'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex justify-between text-[10px] text-evr-muted mb-0.5">
+                      <span>Opacidad</span>
+                      <span>{Math.round((page.backgroundImageOpacity ?? 1) * 100)}%</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={0}
+                      max={1}
+                      step={0.01}
+                      value={page.backgroundImageOpacity ?? 1}
+                      onChange={e => setBackgroundImageOpacity(parseFloat(e.target.value))}
+                      className="w-full accent-evr-accent"
+                    />
+                  </div>
+
+                  <div>
+                    <div className="flex justify-between text-[10px] text-evr-muted mb-0.5">
+                      <span>Desenfoque</span>
+                      <span>{page.backgroundImageBlur ?? 0}px</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={0}
+                      max={40}
+                      step={1}
+                      value={page.backgroundImageBlur ?? 0}
+                      onChange={e => setBackgroundImageBlur(parseInt(e.target.value))}
+                      className="w-full accent-evr-accent"
+                    />
+                  </div>
+
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        className="accent-evr-accent"
+                        checked={!!page.backgroundOverlay}
+                        onChange={e => {
+                          if (e.target.checked) {
+                            setBackgroundOverlay('rgba(0,0,0,0.35)');
+                          } else {
+                            setBackgroundOverlay(null);
+                          }
+                        }}
+                      />
+                      <span className="text-xs">Overlay oscuro</span>
+                    </div>
+                    {page.backgroundOverlay && (
+                      <div className="flex items-center gap-2 mt-1.5">
+                        <input
+                          type="color"
+                          value="#000000"
+                          onChange={e => {
+                            const hex = e.target.value.replace('#', '');
+                            const r = parseInt(hex.slice(0, 2), 16);
+                            const g = parseInt(hex.slice(2, 4), 16);
+                            const b = parseInt(hex.slice(4, 6), 16);
+                            setBackgroundOverlay(`rgba(${r},${g},${b},0.35)`);
+                          }}
+                          className="w-8 h-6 cursor-pointer rounded border border-evr-border bg-transparent"
+                        />
+                        <input
+                          type="range"
+                          min={0}
+                          max={1}
+                          step={0.01}
+                          value={parseFloat(page.backgroundOverlay.match(/[\d.]+(?=\))/)?.[0] || '0.35')}
+                          onChange={e => {
+                            const alpha = parseFloat(e.target.value);
+                            const base = page.backgroundOverlay!.replace(/[\d.]+(?=\))/, alpha.toString());
+                            setBackgroundOverlay(base);
+                          }}
+                          className="flex-1 accent-evr-accent"
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              <div className="mt-3 pt-3 border-t border-evr-border flex items-center gap-2 text-[10px] text-evr-muted">
+                <div
+                  className="w-4 h-4 rounded border border-evr-border overflow-hidden"
+                  style={{ background: page.background || '#ffffff' }}
+                >
+                  {page.backgroundImage && (
+                    <img src={page.backgroundImage} alt="" className="w-full h-full object-cover" />
+                  )}
+                </div>
+                <span className="truncate">
+                  {page.backgroundImage
+                    ? `Imagen + ${page.background}`
+                    : `Color: ${page.background || '#ffffff'}`}
+                </span>
               </div>
             </div>
 
-            <div>
-              <div className="flex justify-between text-[10px] text-evr-muted mb-0.5">
-                <span>Opacidad</span>
-                <span>{Math.round((page.backgroundImageOpacity ?? 1) * 100)}%</span>
+            {/* Vista */}
+            <div className="border-t border-evr-border pt-3">
+              <div className="text-xs font-semibold text-evr-muted uppercase tracking-wide mb-2">
+                Vista
               </div>
-              <input
-                type="range"
-                min={0}
-                max={1}
-                step={0.01}
-                value={page.backgroundImageOpacity ?? 1}
-                onChange={e => setBackgroundImageOpacity(parseFloat(e.target.value))}
-                className="w-full accent-evr-accent"
-              />
-            </div>
-
-            {/* ✅ NUEVO: Slider de Desenfoque */}
-            <div>
-              <div className="flex justify-between text-[10px] text-evr-muted mb-0.5">
-                <span>Desenfoque</span>
-                <span>{page.backgroundImageBlur ?? 0}px</span>
-              </div>
-              <input
-                type="range"
-                min={0}
-                max={40}
-                step={1}
-                value={page.backgroundImageBlur ?? 0}
-                onChange={e => setBackgroundImageBlur(parseInt(e.target.value))}
-                className="w-full accent-evr-accent"
-              />
-            </div>
-
-            <div>
-              <div className="flex items-center gap-2">
+              <label className="flex items-center gap-2 cursor-pointer select-none">
                 <input
                   type="checkbox"
                   className="accent-evr-accent"
-                  checked={!!page.backgroundOverlay}
-                  onChange={e => {
-                    if (e.target.checked) {
-                      setBackgroundOverlay('rgba(0,0,0,0.35)');
-                    } else {
-                      setBackgroundOverlay(null);
-                    }
-                  }}
+                  checked={showSlotBorders}
+                  onChange={e => setUI({ showSlotBorders: e.target.checked })}
                 />
-                <span className="text-xs">Overlay oscuro</span>
+                <Box size={12} className="text-evr-muted" />
+                <span className="text-xs">Mostrar bordes de los slots</span>
+              </label>
+              <div className="text-[10px] text-evr-muted mt-1.5 leading-relaxed">
+                Desactívalo para una vista limpia sin marcos. El slot seleccionado siempre mostrará su contorno.
               </div>
-              {page.backgroundOverlay && (
-                <div className="flex items-center gap-2 mt-1.5">
-                  <input
-                    type="color"
-                    value="#000000"
-                    onChange={e => {
-                      const hex = e.target.value.replace('#', '');
-                      const r = parseInt(hex.slice(0, 2), 16);
-                      const g = parseInt(hex.slice(2, 4), 16);
-                      const b = parseInt(hex.slice(4, 6), 16);
-                      setBackgroundOverlay(`rgba(${r},${g},${b},0.35)`);
-                    }}
-                    className="w-8 h-6 cursor-pointer rounded border border-evr-border bg-transparent"
-                  />
-                  <input
-                    type="range"
-                    min={0}
-                    max={1}
-                    step={0.01}
-                    value={parseFloat(page.backgroundOverlay.match(/[\d.]+(?=\))/)?.[0] || '0.35')}
-                    onChange={e => {
-                      const alpha = parseFloat(e.target.value);
-                      const base = page.backgroundOverlay!.replace(/[\d.]+(?=\))/, alpha.toString());
-                      setBackgroundOverlay(base);
-                    }}
-                    className="flex-1 accent-evr-accent"
-                  />
-                </div>
-              )}
             </div>
           </div>
         )}
 
-        {/* -------- Muestra el color/imagen actual -------- */}
-        <div className="mt-3 pt-3 border-t border-evr-border flex items-center gap-2 text-[10px] text-evr-muted">
-          <div
-            className="w-4 h-4 rounded border border-evr-border overflow-hidden"
-            style={{ background: page.background || '#ffffff' }}
-          >
-            {page.backgroundImage && (
-              <img src={page.backgroundImage} alt="" className="w-full h-full object-cover" />
-            )}
-          </div>
-          <span className="truncate">
-            {page.backgroundImage
-              ? `Imagen + ${page.background}`
-              : `Color: ${page.background || '#ffffff'}`}
-          </span>
-        </div>
       </div>
     </div>
   );
@@ -645,7 +697,6 @@ export function RightPanel() {
 /* ============================================================
  * Unir / Dividir / Eliminar slots
  * ============================================================ */
-
 function MergeSplitTools({ slot }: { slot: Slot }) {
   const selectedIds = useStore(s => s.ui.selectedSlotIds);
   const mergeSlots = useStore(s => s.mergeSlots);
@@ -732,7 +783,6 @@ function MergeSplitTools({ slot }: { slot: Slot }) {
 /* ============================================================
  * Alineación y distribución
  * ============================================================ */
-
 function AlignTools({ slot, page }: { slot: Slot; page: Page }) {
   const updateSlot = useStore(s => s.updateSlot);
 

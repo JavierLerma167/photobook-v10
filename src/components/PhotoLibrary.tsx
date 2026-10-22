@@ -1,3 +1,4 @@
+// src/components/PhotoLibrary.tsx
 'use client';
 
 import React, { useCallback, useMemo, useRef, useState } from 'react';
@@ -5,7 +6,8 @@ import { useStore } from '@/src/store/projectStore';
 import { fileToPhoto } from '@/src/utils/imageProxy';
 import {
   Star, Trash2, Upload, CheckSquare, Square,
-  Folder as FolderIcon, FolderPlus, Pencil, Check, X, ChevronDown
+  Folder as FolderIcon, FolderPlus, Pencil, Check, X, ChevronDown,
+  Search, ArrowUpDown // ✅ NUEVOS ICONOS
 } from 'lucide-react';
 
 export function PhotoLibrary() {
@@ -36,6 +38,10 @@ export function PhotoLibrary() {
   const [editingFolderName, setEditingFolderName] = useState('');
   const [moveMenuPhotoId, setMoveMenuPhotoId] = useState<string | null>(null);
 
+  // ✅ NUEVOS: Estado para el Buscador y la Ordenación
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortBy, setSortBy] = useState<'date' | 'name' | 'size' | 'favorite'>('date');
+
   const fileInput = useRef<HTMLInputElement>(null);
 
   // Suscribimos a `pages` (referencia estable del array en el store)
@@ -48,11 +54,36 @@ export function PhotoLibrary() {
     return set;
   }, [pages]);
 
-  // ✅ Filtramos las fotos por la carpeta activa
+  // ✅ MODIFICADO: Filtramos las fotos por carpeta y por búsqueda, y las ordenamos
   const filteredPhotos = useMemo(() => {
-    if (activeFolderId === null) return photos; // "Todas"
-    return photos.filter(p => (p.folderId ?? null) === activeFolderId);
-  }, [photos, activeFolderId]);
+    // 1. Filtrar por carpeta
+    let result = activeFolderId === null
+      ? photos
+      : photos.filter(p => (p.folderId ?? null) === activeFolderId);
+
+    // 2. Filtrar por búsqueda (nombre)
+    if (searchQuery.trim() !== '') {
+      const query = searchQuery.toLowerCase().trim();
+      result = result.filter(p => p.name.toLowerCase().includes(query));
+    }
+
+    // 3. Ordenar
+    result = [...result].sort((a, b) => {
+      switch (sortBy) {
+        case 'name':
+          return a.name.localeCompare(b.name);
+        case 'size':
+          return b.sizeBytes - a.sizeBytes; // Más grandes primero
+        case 'favorite':
+          return (b.favorite ? 1 : 0) - (a.favorite ? 1 : 0); // Favoritas primero
+        case 'date':
+        default:
+          return b.createdAt - a.createdAt; // Más recientes primero
+      }
+    });
+
+    return result;
+  }, [photos, activeFolderId, searchQuery, sortBy]);
 
   // -------------------------------------------------------------
   // Importar archivos
@@ -213,6 +244,49 @@ export function PhotoLibrary() {
         />
       </div>
 
+      {/* ✅ ---------- Barra de Buscador y Ordenación ---------- */}
+      <div className="px-3 py-2 border-b border-evr-border space-y-2">
+        {/* Buscador */}
+        <div className="relative">
+          <Search
+            size={12}
+            className="absolute left-2 top-1/2 -translate-y-1/2 text-evr-muted pointer-events-none"
+          />
+          <input
+            type="text"
+            className="input w-full text-xs pl-7 pr-6"
+            placeholder="Buscar por nombre..."
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+          />
+          {searchQuery && (
+            <button
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 text-evr-muted hover:text-evr-text"
+              onClick={() => setSearchQuery('')}
+              title="Limpiar búsqueda"
+            >
+              <X size={12} />
+            </button>
+          )}
+        </div>
+
+        {/* Ordenación */}
+        <div className="flex items-center gap-1">
+          <ArrowUpDown size={12} className="text-evr-muted shrink-0" />
+          <select
+            className="input w-full text-xs py-1"
+            value={sortBy}
+            onChange={e => setSortBy(e.target.value as any)}
+            title="Ordenar fotos"
+          >
+            <option value="date">Más recientes</option>
+            <option value="name">Nombre (A-Z)</option>
+            <option value="size">Tamaño (mayor)</option>
+            <option value="favorite">Favoritas primero</option>
+          </select>
+        </div>
+      </div>
+
       {/* ✅ ---------- Barra de carpetas ---------- */}
       <div className="px-3 py-2 border-b border-evr-border space-y-2">
         <div className="flex items-center gap-1">
@@ -348,8 +422,8 @@ export function PhotoLibrary() {
         )}
         {photos.length > 0 && filteredPhotos.length === 0 && (
           <div className="text-center text-evr-muted text-xs py-8 px-2 leading-relaxed">
-            No hay fotos en esta carpeta.<br />
-            Arrastra fotos aquí o cámbialas de carpeta.
+            No hay fotos que coincidan.<br />
+            Prueba con otra búsqueda o carpeta.
           </div>
         )}
         <div className="grid grid-cols-2 gap-1.5">
